@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#120b24">
+  <meta name="description" content="Sua biblioteca pessoal de jogos arcade retrô, com jogos grátis que rodam no navegador.">
+  <title>Arcade Vault — Biblioteca Retrô</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Arcade Vault início"><span class="brand-icon">✦</span><span>ARCADE<span class="brand-accent">VAULT</span><small>PLAYER ONE READY</small></span></a>
+    <nav class="top-nav" aria-label="Navegação principal">
+      <button class="nav-link active" data-view="all">Biblioteca</button>
+      <button class="nav-link" data-view="favorites">Favoritos <span id="favorite-count" class="count">0</span></button>
+    </nav>
+    <button id="sound-toggle" class="sound-toggle" aria-pressed="false" title="Ativar efeitos sonoros">♫ <span>Som OFF</span></button>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="pulse-dot"></span> ARQUIVO DE JOGOS • EDIÇÃO PESSOAL</div>
+        <h1>APERTE <span>START.</span><br>VOLTE NO TEMPO.</h1>
+        <p>Uma coleção de jogos arcade para abrir direto no navegador. Escolha seu desafio e faça sua pontuação!</p>
+        <a class="primary-button" href="#library">▶ EXPLORAR JOGOS</a>
+      </div>
+      <div class="hero-art" aria-label="Ilustração de fliperama retrô">
+        <div class="sun"></div><div class="pixel-star star-a">✦</div><div class="pixel-star star-b">✧</div>
+        <div class="cabinet">
+          <div class="cabinet-top">ARCADE <b>VAULT</b></div>
+          <div class="cabinet-screen"><div class="screen-sky"></div><div class="screen-mountains"></div><div class="screen-player">▲</div><div class="screen-text">INSERT COIN</div></div>
+          <div class="cabinet-controls"><span class="joystick"></span><i></i><i></i><i></i></div>
+          <div class="cabinet-bottom">★ PLAYER 1 ★</div>
+        </div>
+        <div class="hero-floor"></div>
+      </div>
+    </section>
+
+    <section class="stats" aria-label="Resumo da biblioteca">
+      <div><strong id="game-total">06</strong><span>JOGOS DISPONÍVEIS</span></div>
+      <div><strong id="played-total">00</strong><span>PARTIDAS INICIADAS</span></div>
+      <div><strong id="fav-total">00</strong><span>NA SUA LISTA</span></div>
+    </section>
+
+    <section id="library" class="library-section">
+      <div class="section-heading">
+        <div><div class="eyebrow">SELECIONE SEU JOGO</div><h2>Central de <span>Arcade</span></h2></div>
+        <label class="search-box"><span>⌕</span><input id="search" type="search" placeholder="Buscar jogo..." aria-label="Buscar jogo"></label>
+      </div>
+      <div class="filters" id="filters">
+        <button class="filter active" data-category="Todos">Todos <span>06</span></button>
+        <button class="filter" data-category="Arcade">Arcade</button>
+        <button class="filter" data-category="Puzzle">Puzzle</button>
+        <button class="filter" data-category="Ação">Ação</button>
+        <button class="filter" data-category="Clássicos">Clássicos</button>
+      </div>
+      <div class="game-grid" id="game-grid" aria-live="polite"></div>
+      <div id="empty-state" class="empty-state hidden"><span>👾</span><h3>Nenhum jogo encontrado</h3><p>Tente outro nome ou categoria.</p></div>
+    </section>
+
+    <section class="how-to">
+      <div class="how-icon">ⓘ</div><div><h3>Como funciona?</h3><p>Os jogos desta biblioteca são pequenos jogos originais, feitos para rodar localmente no navegador. Seus favoritos e estatísticas ficam salvos neste dispositivo. Não é necessário criar conta.</p></div>
+    </section>
+  </main>
+
+  <footer><div class="footer-logo">✦ ARCADE<span>VAULT</span></div><p>Feito para quem nunca deixou de jogar. <span>© 2026</span></p><a href="#library">VOLTAR AO TOPO ↑</a></footer>
+
+  <div id="game-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-panel">
+      <div class="modal-head"><div><span class="eyebrow">AGORA JOGANDO</span><h2 id="modal-title">Jogo</h2></div><button id="close-game" class="close-button" aria-label="Fechar jogo">✕</button></div>
+      <div class="game-stage" id="game-stage"><canvas id="game-canvas" width="640" height="400" aria-label="Área de jogo"></canvas><div id="game-overlay" class="game-overlay"><h3 id="overlay-title">PRONTO?</h3><p id="overlay-help">Pressione iniciar para jogar</p><button id="start-game" class="primary-button">▶ INICIAR JOGO</button></div></div>
+      <div class="game-controls"><span id="game-instructions">Use as setas do teclado</span><span class="best-score">RECORDE: <b id="best-score">0</b></span></div>
+      <div class="modal-foot"><span>ESC PARA FECHAR</span><button id="restart-game" class="text-button">↻ REINICIAR</button></div>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
