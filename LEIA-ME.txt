@@ -1,0 +1,10 @@
+RETROVAULT - VERSAO QUE ACEITA QUALQUER ARQUIVO
+
+1. Publique index.html e games.json na mesma pasta do GitHub Pages.
+2. O seletor agora aceita qualquer tipo de arquivo e tenta guardar no navegador atual.
+3. Arquivos importados pela opcao Adicionar ROM ficam apenas nesse navegador/dispositivo; nao sao enviados ao site nem compartilhados com visitantes.
+4. Aceitar/guardar um arquivo nao significa que ele possa ser executado. Somente sistemas configurados no emulador podem ser iniciados.
+5. Arquivos ZIP/7z/RAR nao sao extraidos automaticamente. Executaveis EXE/APK e formatos nao suportados nao rodam apenas por serem importados.
+6. PSP/PBP/ISO/CSO pode continuar sem funcionar no GitHub Pages devido aos requisitos do emulador e do navegador. PBP foi identificado como PSP, mas precisa ser testado.
+7. Arquivos grandes podem exceder o armazenamento disponível do navegador.
+8. Para um catálogo público, games.json precisa conter URLs HTTPS reais, públicas e autorizadas. O endereço de exemplo não é um jogo real.
