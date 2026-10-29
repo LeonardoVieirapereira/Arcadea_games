@@ -2,80 +2,944 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#120b24">
-  <meta name="description" content="Sua biblioteca pessoal de jogos arcade retrô, com jogos grátis que rodam no navegador.">
-  <title>Arcade Vault — Biblioteca Retrô</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>RetroVault — Emulador & Biblioteca Web</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --font-pixel: 'Press Start 2P', cursive;
+      --font-tech: 'Share Tech Mono', monospace;
+      --font-body: 'Rajdhani', sans-serif;
+      --neon-pink: #ff2a85;
+      --neon-cyan: #00f3ff;
+      --neon-yellow: #ffe600;
+      --neon-purple: #b537f2;
+      --bg-dark: #0a0813;
+      --panel-bg: rgba(20, 15, 38, 0.85);
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: #e2e8f0;
+      font-family: var(--font-body);
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(181, 55, 242, 0.18), transparent 70%),
+        radial-gradient(circle at 80% 80%, rgba(0, 243, 255, 0.1), transparent 50%),
+        linear-gradient(0deg, rgba(10, 8, 19, 0.95) 0%, rgba(10, 8, 19, 0.8) 100%);
+      background-attachment: fixed;
+      touch-action: manipulation;
+    }
+
+    .font-pixel { font-family: var(--font-pixel); }
+    .font-tech { font-family: var(--font-tech); }
+
+    /* Scanline & CRT Effect */
+    .scanlines {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 99;
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.25) 50%
+      ), linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.03),
+        rgba(0, 255, 0, 0.01),
+        rgba(0, 0, 255, 0.03)
+      );
+      background-size: 100% 4px, 6px 100%;
+      opacity: 0.6;
+    }
+
+    .crt-screen {
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 0 50px rgba(0,0,0,0.8), 0 0 20px rgba(0, 243, 255, 0.3);
+      border: 4px solid #2d234d;
+      border-radius: 12px;
+      background-color: #05040a;
+    }
+
+    .crt-screen::before {
+      content: " ";
+      display: block;
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+      background-size: 100% 4px;
+      z-index: 10;
+      pointer-events: none;
+      opacity: 0.4;
+    }
+
+    /* Glow Effects */
+    .glow-pink { text-shadow: 0 0 10px var(--neon-pink), 0 0 20px var(--neon-pink); }
+    .glow-cyan { text-shadow: 0 0 10px var(--neon-cyan), 0 0 20px var(--neon-cyan); }
+    .box-glow-cyan { box-shadow: 0 0 15px rgba(0, 243, 255, 0.4); }
+    .box-glow-pink { box-shadow: 0 0 15px rgba(255, 42, 133, 0.4); }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0d091e; }
+    ::-webkit-scrollbar-thumb { background: #332554; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--neon-pink); }
+
+    /* Controls Styling */
+    .btn-dpad {
+      background: linear-gradient(145deg, #2a2244, #181329);
+      border: 1px solid #4a3b78;
+      box-shadow: 0 4px 0 #100b1d, inset 0 1px 1px rgba(255,255,255,0.2);
+    }
+    .btn-dpad:active, .btn-dpad.active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 #100b1d;
+      background: var(--neon-purple);
+    }
+
+    .btn-action {
+      border-radius: 50%;
+      font-family: var(--font-pixel);
+      transition: all 0.05s ease;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.5), inset 0 2px 2px rgba(255,255,255,0.4);
+    }
+    .btn-action:active, .btn-action.active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.5);
+    }
+
+    /* Dropzone animation */
+    .dropzone-dash {
+      background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='12' ry='12' stroke='%2300F3FF88' stroke-width='3' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
+      border-radius: 12px;
+    }
+    .drag-over {
+      background-color: rgba(0, 243, 255, 0.15) !important;
+      background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='12' ry='12' stroke='%23FF2A85FF' stroke-width='4' stroke-dasharray='8%2c 8' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e") !important;
+    }
+
+    /* Retro Game Boy Screen Palette */
+    .gb-canvas {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+  </style>
 </head>
-<body>
-  <div class="scanlines" aria-hidden="true"></div>
-  <header class="topbar">
-    <a class="brand" href="#" aria-label="Arcade Vault início"><span class="brand-icon">✦</span><span>ARCADE<span class="brand-accent">VAULT</span><small>PLAYER ONE READY</small></span></a>
-    <nav class="top-nav" aria-label="Navegação principal">
-      <button class="nav-link active" data-view="all">Biblioteca</button>
-      <button class="nav-link" data-view="favorites">Favoritos <span id="favorite-count" class="count">0</span></button>
-    </nav>
-    <button id="sound-toggle" class="sound-toggle" aria-pressed="false" title="Ativar efeitos sonoros">♫ <span>Som OFF</span></button>
+<body class="min-h-screen flex flex-col justify-between select-none">
+
+  <!-- Scanline Overlay -->
+  <div class="scanlines"></div>
+
+  <!-- Header / Navigation -->
+  <header class="border-b border-purple-900/60 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3 cursor-pointer" onclick="switchView('library')">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-tr from-pink-600 to-cyan-400 p-[2px] box-glow-pink">
+          <div class="w-full h-full bg-slate-950 rounded-[6px] flex items-center justify-center text-cyan-400 font-pixel text-lg">
+            🎮
+          </div>
+        </div>
+        <div>
+          <h1 class="font-pixel text-sm md:text-base text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-500 to-yellow-300">
+            RETRO<span class="text-white">VAULT</span>
+          </h1>
+          <p class="font-tech text-xs text-purple-400 tracking-wider">CYBERPUNK ROM STATION & EMULATION</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center gap-2 bg-slate-900/90 p-1 rounded-xl border border-purple-900/40">
+        <button id="nav-library" onclick="switchView('library')" class="px-4 py-2 rounded-lg font-tech text-sm flex items-center gap-2 transition-all bg-purple-900/60 text-cyan-300 border border-cyan-500/30">
+          <span>📚</span> Biblioteca
+        </button>
+        <button id="nav-emulator" onclick="switchView('emulator')" class="px-4 py-2 rounded-lg font-tech text-sm flex items-center gap-2 transition-all text-slate-400 hover:text-slate-200">
+          <span>🕹️</span> Jogar Agora <span id="playing-badge" class="hidden w-2 h-2 rounded-full bg-pink-500 animate-pulse"></span>
+        </button>
+        <button id="nav-upload" onclick="switchView('upload')" class="px-4 py-2 rounded-lg font-tech text-sm flex items-center gap-2 transition-all text-slate-400 hover:text-slate-200">
+          <span>➕</span> Add ROM
+        </button>
+      </nav>
+
+      <!-- Audio & Fullscreen Quick Controls -->
+      <div class="flex items-center gap-3">
+        <button onclick="toggleGlobalMute()" id="btn-mute" class="p-2 rounded-lg bg-slate-900 border border-slate-700 hover:border-pink-500 text-slate-300 transition-colors" title="Mute/Unmute">
+          🔊
+        </button>
+        <button onclick="toggleFullscreen()" class="p-2 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500 text-slate-300 transition-colors" title="Tela Cheia">
+          ⛶
+        </button>
+      </div>
+    </div>
   </header>
 
-  <main>
-    <section class="hero">
-      <div class="hero-copy">
-        <div class="eyebrow"><span class="pulse-dot"></span> ARQUIVO DE JOGOS • EDIÇÃO PESSOAL</div>
-        <h1>APERTE <span>START.</span><br>VOLTE NO TEMPO.</h1>
-        <p>Uma coleção de jogos arcade para abrir direto no navegador. Escolha seu desafio e faça sua pontuação!</p>
-        <a class="primary-button" href="#library">▶ EXPLORAR JOGOS</a>
-      </div>
-      <div class="hero-art" aria-label="Ilustração de fliperama retrô">
-        <div class="sun"></div><div class="pixel-star star-a">✦</div><div class="pixel-star star-b">✧</div>
-        <div class="cabinet">
-          <div class="cabinet-top">ARCADE <b>VAULT</b></div>
-          <div class="cabinet-screen"><div class="screen-sky"></div><div class="screen-mountains"></div><div class="screen-player">▲</div><div class="screen-text">INSERT COIN</div></div>
-          <div class="cabinet-controls"><span class="joystick"></span><i></i><i></i><i></i></div>
-          <div class="cabinet-bottom">★ PLAYER 1 ★</div>
+  <!-- MAIN CONTENT AREA -->
+  <main class="max-w-7xl mx-auto w-full px-4 py-6 flex-1 flex flex-col justify-center">
+
+    <!-- 1. VIEW: LIBRARY -->
+    <section id="view-library" class="space-y-6">
+      
+      <!-- Top Banner / Search / Filter -->
+      <div class="bg-slate-900/70 border border-purple-800/40 rounded-2xl p-5 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
+        <div class="flex-1 min-w-[260px]">
+          <div class="relative">
+            <input type="text" id="search-input" oninput="filterLibrary()" placeholder="Buscar jogo por nome ou sistema..." class="w-full bg-slate-950/80 border border-purple-900/60 rounded-xl px-4 py-2.5 pl-10 text-sm font-tech text-cyan-200 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400">
+            <span class="absolute left-3 top-2.5 text-slate-500">🔍</span>
+          </div>
         </div>
-        <div class="hero-floor"></div>
+
+        <div class="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
+          <button onclick="filterSystem('ALL')" class="sys-filter-btn px-3 py-1.5 rounded-lg font-tech text-xs border border-cyan-500/50 bg-cyan-950/60 text-cyan-300">TODOS</button>
+          <button onclick="filterSystem('GB')" class="sys-filter-btn px-3 py-1.5 rounded-lg font-tech text-xs border border-slate-800 bg-slate-900 text-slate-400 hover:border-purple-600">GAME BOY</button>
+          <button onclick="filterSystem('GBC')" class="sys-filter-btn px-3 py-1.5 rounded-lg font-tech text-xs border border-slate-800 bg-slate-900 text-slate-400 hover:border-purple-600">GB COLOR</button>
+          <button onclick="filterSystem('NES')" class="sys-filter-btn px-3 py-1.5 rounded-lg font-tech text-xs border border-slate-800 bg-slate-900 text-slate-400 hover:border-purple-600">NES</button>
+          <button onclick="filterSystem('SNES')" class="sys-filter-btn px-3 py-1.5 rounded-lg font-tech text-xs border border-slate-800 bg-slate-900 text-slate-400 hover:border-purple-600">SNES</button>
+          <button onclick="filterSystem('GENESIS')" class="sys-filter-btn px-3 py-1.5 rounded-lg font-tech text-xs border border-slate-800 bg-slate-900 text-slate-400 hover:border-purple-600">SEGA / MD</button>
+        </div>
+      </div>
+
+      <!-- Games Grid -->
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-pixel text-xs text-purple-300 flex items-center gap-2">
+            <span>⚡</span> SUA COLEÇÃO <span id="library-count" class="font-tech text-cyan-400 text-sm">(0)</span>
+          </h2>
+          <button onclick="switchView('upload')" class="font-tech text-xs text-pink-400 hover:text-pink-300 flex items-center gap-1">
+            + Adicionar Nova ROM
+          </button>
+        </div>
+
+        <div id="games-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+          <!-- Game Cards inject dynamic here -->
+        </div>
+
+        <div id="empty-library" class="hidden text-center py-16 bg-slate-900/40 rounded-2xl border border-dashed border-purple-900/40">
+          <div class="text-5xl mb-3">👾</div>
+          <h3 class="font-pixel text-xs text-purple-300 mb-2">Nenhum jogo encontrado</h3>
+          <p class="font-tech text-sm text-slate-400 max-w-md mx-auto mb-6">Sua biblioteca está vazia ou o filtro não retornou resultados. Adicione suas próprias ROMs para jogar direto no navegador!</p>
+          <button onclick="switchView('upload')" class="px-6 py-3 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-tech text-sm font-bold shadow-lg shadow-pink-900/30">
+            ➕ Adicionar ROMs Agora
+          </button>
+        </div>
       </div>
     </section>
 
-    <section class="stats" aria-label="Resumo da biblioteca">
-      <div><strong id="game-total">06</strong><span>JOGOS DISPONÍVEIS</span></div>
-      <div><strong id="played-total">00</strong><span>PARTIDAS INICIADAS</span></div>
-      <div><strong id="fav-total">00</strong><span>NA SUA LISTA</span></div>
+    <!-- 2. VIEW: EMULATOR STAGE -->
+    <section id="view-emulator" class="hidden space-y-4">
+      
+      <!-- Game Info Bar & Controls top -->
+      <div class="bg-slate-900/90 border border-purple-800/50 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 backdrop-blur-md">
+        <div class="flex items-center gap-3">
+          <span id="emu-system-badge" class="px-2.5 py-1 rounded bg-purple-950 border border-purple-700 text-pink-400 font-tech text-xs font-bold">GB</span>
+          <div>
+            <h2 id="emu-title" class="font-pixel text-xs text-cyan-300 max-w-xs md:max-w-md truncate">Nenhum Jogo Carregado</h2>
+            <p id="emu-status" class="font-tech text-xs text-slate-400">Aguardando inicialização...</p>
+          </div>
+        </div>
+
+        <!-- Emulator Control Action Bar -->
+        <div class="flex items-center flex-wrap gap-2">
+          <button onclick="saveState()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-cyan-300 font-tech text-xs flex items-center gap-1">
+            💾 Save State
+          </button>
+          <button onclick="loadState()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-yellow-300 font-tech text-xs flex items-center gap-1">
+            📂 Load State
+          </button>
+          <button onclick="resetEmulator()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-pink-400 font-tech text-xs flex items-center gap-1">
+            🔄 Reset
+          </button>
+          <button onclick="pauseEmulator()" id="btn-pause" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 font-tech text-xs">
+            ⏸️ Pausar
+          </button>
+          <button onclick="switchView('library')" class="px-3 py-1.5 rounded-lg bg-purple-950 border border-purple-700 text-purple-200 font-tech text-xs hover:bg-purple-900">
+            🚪 Sair do Jogo
+          </button>
+        </div>
+      </div>
+
+      <!-- SCREEN & CABINET MAIN CONTAINER -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- CRT Game Display Screen (Lg: 8 cols) -->
+        <div class="lg:col-span-8 flex flex-col items-center">
+          <div class="w-full max-w-2xl crt-screen p-2 md:p-4 flex flex-col items-center justify-center min-h-[300px] md:min-h-[420px] relative">
+            
+            <!-- Canvas Object -->
+            <canvas id="emulator-canvas" width="160" height="144" class="gb-canvas w-full h-auto max-w-[480px] aspect-[10/9] bg-black rounded shadow-inner"></canvas>
+            
+            <!-- Overlay Message (Pause/Start/Notice) -->
+            <div id="emulator-overlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20">
+              <div class="text-5xl mb-4 animate-bounce">🕹️</div>
+              <h3 id="overlay-title" class="font-pixel text-sm text-cyan-300 mb-2">PRONTO PARA JOGAR</h3>
+              <p id="overlay-desc" class="font-tech text-sm text-slate-400 max-w-xs mb-6">Selecione um jogo da sua biblioteca ou carregue uma nova ROM para começar.</p>
+              <button id="overlay-action" onclick="switchView('library')" class="px-6 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-tech text-sm font-bold shadow-lg shadow-pink-900/50 transition-all">
+                Ir para a Biblioteca
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Keyboard Shortcuts Helper -->
+          <div class="w-full max-w-2xl mt-3 p-3 bg-slate-900/60 border border-purple-900/30 rounded-xl flex flex-wrap justify-between text-xs font-tech text-slate-400">
+            <span><b>D-Pad:</b> Setas / WASD</span>
+            <span><b>A:</b> Z / J</span>
+            <span><b>B:</b> X / K</span>
+            <span><b>SELECT:</b> Shift</span>
+            <span><b>START:</b> Enter</span>
+          </div>
+        </div>
+
+        <!-- Touch Controls & Gamepad Cabinet (Lg: 4 cols) -->
+        <div class="lg:col-span-4 bg-slate-900/80 border border-purple-800/50 rounded-2xl p-5 backdrop-blur-md flex flex-col justify-between space-y-6">
+          <div class="flex items-center justify-between border-b border-purple-900/40 pb-3">
+            <h3 class="font-pixel text-xs text-cyan-400">CONTROLES TOUCH</h3>
+            <span class="font-tech text-xs text-slate-400">MODO VIRTUAL</span>
+          </div>
+
+          <!-- Virtual D-Pad & Action Buttons Grid -->
+          <div class="flex flex-col items-center gap-6 py-2">
+            
+            <!-- D-Pad Directional -->
+            <div class="relative w-40 h-40 flex items-center justify-center">
+              <button id="btn-up" data-key="ArrowUp" class="btn-dpad absolute top-0 w-12 h-14 rounded-t-lg flex items-center justify-center text-slate-200 font-bold text-lg">▲</button>
+              <button id="btn-left" data-key="ArrowLeft" class="btn-dpad absolute left-0 w-14 h-12 rounded-l-lg flex items-center justify-center text-slate-200 font-bold text-lg">◀</button>
+              <div class="w-10 h-10 bg-slate-950 z-10 rounded-full border border-purple-900/50"></div>
+              <button id="btn-right" data-key="ArrowRight" class="btn-dpad absolute right-0 w-14 h-12 rounded-r-lg flex items-center justify-center text-slate-200 font-bold text-lg">▶</button>
+              <button id="btn-down" data-key="ArrowDown" class="btn-dpad absolute bottom-0 w-12 h-14 rounded-b-lg flex items-center justify-center text-slate-200 font-bold text-lg">▼</button>
+            </div>
+
+            <!-- Action Buttons (A/B & X/Y) -->
+            <div class="flex items-center justify-center gap-4">
+              <div class="flex flex-col items-center gap-1">
+                <button id="btn-b" data-key="KeyX" class="btn-action w-14 h-14 bg-gradient-to-tr from-pink-700 to-pink-500 text-white font-pixel text-xs flex items-center justify-center">B</button>
+                <span class="font-tech text-[10px] text-slate-400">Tecla X</span>
+              </div>
+              <div class="flex flex-col items-center gap-1 -mt-4">
+                <button id="btn-a" data-key="KeyZ" class="btn-action w-14 h-14 bg-gradient-to-tr from-cyan-600 to-cyan-400 text-slate-950 font-pixel text-xs flex items-center justify-center font-bold">A</button>
+                <span class="font-tech text-[10px] text-slate-400">Tecla Z</span>
+              </div>
+            </div>
+
+            <!-- Select & Start Buttons -->
+            <div class="flex items-center justify-center gap-6 pt-2 w-full">
+              <div class="flex flex-col items-center gap-1">
+                <button id="btn-select" data-key="ShiftLeft" class="w-16 h-7 bg-slate-800 hover:bg-slate-700 rounded-full border border-slate-600 font-tech text-xs text-slate-300">SELECT</button>
+                <span class="font-tech text-[10px] text-slate-500">SHIFT</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <button id="btn-start" data-key="Enter" class="w-16 h-7 bg-slate-800 hover:bg-slate-700 rounded-full border border-slate-600 font-tech text-xs text-cyan-300">START</button>
+                <span class="font-tech text-[10px] text-slate-500">ENTER</span>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Console Settings / Fast Forward -->
+          <div class="border-t border-purple-900/40 pt-4 flex items-center justify-between text-xs font-tech text-slate-400">
+            <span>Turbo Mode</span>
+            <button id="btn-turbo" onclick="toggleTurbo()" class="px-3 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300">1.0x (Normal)</button>
+          </div>
+        </div>
+
+      </div>
     </section>
 
-    <section id="library" class="library-section">
-      <div class="section-heading">
-        <div><div class="eyebrow">SELECIONE SEU JOGO</div><h2>Central de <span>Arcade</span></h2></div>
-        <label class="search-box"><span>⌕</span><input id="search" type="search" placeholder="Buscar jogo..." aria-label="Buscar jogo"></label>
+    <!-- 3. VIEW: UPLOAD & IMPORT ROM -->
+    <section id="view-upload" class="hidden max-w-3xl mx-auto w-full space-y-6">
+      
+      <div class="text-center space-y-2">
+        <h2 class="font-pixel text-sm md:text-base text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-300 to-cyan-400">
+          ADICIONAR JOGOS À BIBLIOTECA
+        </h2>
+        <p class="font-tech text-sm text-slate-400">
+          Envie seus arquivos de ROM (.gb, .gbc, .nes, .smc, .sfc, .md, .bin, .z64). Eles ficarão salvos no seu navegador via IndexedDB!
+        </p>
       </div>
-      <div class="filters" id="filters">
-        <button class="filter active" data-category="Todos">Todos <span>06</span></button>
-        <button class="filter" data-category="Arcade">Arcade</button>
-        <button class="filter" data-category="Puzzle">Puzzle</button>
-        <button class="filter" data-category="Ação">Ação</button>
-        <button class="filter" data-category="Clássicos">Clássicos</button>
+
+      <!-- Drag and Drop Dropzone -->
+      <div id="dropzone" class="dropzone-dash p-8 md:p-12 text-center bg-slate-900/40 hover:bg-slate-900/60 transition-all cursor-pointer flex flex-col items-center justify-center space-y-4">
+        <div class="w-16 h-16 rounded-2xl bg-purple-950 border border-purple-700 flex items-center justify-center text-3xl text-cyan-300 shadow-lg shadow-purple-950/50">
+          📁
+        </div>
+        <div>
+          <h3 class="font-pixel text-xs text-cyan-300 mb-1">ARRASTE & SOLTE SUAS ROMS AQUI</h3>
+          <p class="font-tech text-sm text-slate-400">ou clique para procurar no seu dispositivo</p>
+        </div>
+        <input type="file" id="file-input" multiple accept=".gb,.gbc,.nes,.smc,.sfc,.bin,.md,.gen,.z64,.zip" class="hidden">
+        <div class="flex flex-wrap gap-2 justify-center font-tech text-xs text-purple-400 pt-2">
+          <span class="px-2 py-0.5 rounded bg-slate-900 border border-purple-900">.GB</span>
+          <span class="px-2 py-0.5 rounded bg-slate-900 border border-purple-900">.GBC</span>
+          <span class="px-2 py-0.5 rounded bg-slate-900 border border-purple-900">.NES</span>
+          <span class="px-2 py-0.5 rounded bg-slate-900 border border-purple-900">.SMC / .SFC</span>
+          <span class="px-2 py-0.5 rounded bg-slate-900 border border-purple-900">.MD / .BIN</span>
+        </div>
       </div>
-      <div class="game-grid" id="game-grid" aria-live="polite"></div>
-      <div id="empty-state" class="empty-state hidden"><span>👾</span><h3>Nenhum jogo encontrado</h3><p>Tente outro nome ou categoria.</p></div>
+
+      <!-- Instructions & Privacy Info -->
+      <div class="bg-slate-900/60 border border-purple-900/40 rounded-2xl p-5 space-y-3 font-tech text-sm text-slate-300">
+        <h4 class="font-pixel text-xs text-yellow-300 flex items-center gap-2">
+          <span>💡</span> INFORMAÇÕES & COMPATIBILIDADE
+        </h4>
+        <ul class="list-disc list-inside space-y-1.5 text-slate-400 text-xs">
+          <li><b>Privacidade:</b> Suas ROMs são armazenadas exclusivamente no banco de dados local do seu navegador (IndexedDB). Nenhum arquivo é enviado para servidores externos.</li>
+          <li><b>Emulação Nativa:</b> O emulador integrado possui suporte direto a jogos de Game Boy / Game Boy Color. Outros formatos (.nes, .smc, .md) são organizados na sua biblioteca e salvos com leitor universal.</li>
+          <li><b>Limpeza de Biblioteca:</b> Você pode excluir jogos individualmente da sua coleção a qualquer momento.</li>
+        </ul>
+      </div>
     </section>
 
-    <section class="how-to">
-      <div class="how-icon">ⓘ</div><div><h3>Como funciona?</h3><p>Os jogos desta biblioteca são pequenos jogos originais, feitos para rodar localmente no navegador. Seus favoritos e estatísticas ficam salvos neste dispositivo. Não é necessário criar conta.</p></div>
-    </section>
   </main>
 
-  <footer><div class="footer-logo">✦ ARCADE<span>VAULT</span></div><p>Feito para quem nunca deixou de jogar. <span>© 2026</span></p><a href="#library">VOLTAR AO TOPO ↑</a></footer>
-
-  <div id="game-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-    <div class="modal-panel">
-      <div class="modal-head"><div><span class="eyebrow">AGORA JOGANDO</span><h2 id="modal-title">Jogo</h2></div><button id="close-game" class="close-button" aria-label="Fechar jogo">✕</button></div>
-      <div class="game-stage" id="game-stage"><canvas id="game-canvas" width="640" height="400" aria-label="Área de jogo"></canvas><div id="game-overlay" class="game-overlay"><h3 id="overlay-title">PRONTO?</h3><p id="overlay-help">Pressione iniciar para jogar</p><button id="start-game" class="primary-button">▶ INICIAR JOGO</button></div></div>
-      <div class="game-controls"><span id="game-instructions">Use as setas do teclado</span><span class="best-score">RECORDE: <b id="best-score">0</b></span></div>
-      <div class="modal-foot"><span>ESC PARA FECHAR</span><button id="restart-game" class="text-button">↻ REINICIAR</button></div>
+  <!-- Footer -->
+  <footer class="border-t border-purple-900/40 bg-slate-950/90 py-4 mt-8">
+    <div class="max-w-7xl mx-auto px-4 flex flex-wrap items-center justify-between text-xs font-tech text-slate-500 gap-2">
+      <div>RETROVAULT v2.5 — CYBERPUNK WEB EMULATION STATION</div>
+      <div class="flex items-center gap-4">
+        <span>STORED IN INDEXEDDB</span>
+        <span class="text-cyan-400">RETRO WEB ENGINE</span>
+      </div>
     </div>
-  </div>
-  <script src="script.js"></script>
+  </footer>
+
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    /**
+     * RETROVAULT - Complete Web Retrogaming Platform
+     * Integrated Game Boy / GBC Core Engine & IndexedDB Rom Storage
+     */
+
+    // --- IndexedDB Configuration ---
+    const DB_NAME = 'RetroVaultDB';
+    const DB_VERSION = 1;
+    const STORE_ROMS = 'roms';
+    const STORE_SAVES = 'saves';
+    let db = null;
+
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onerror = (e) => reject("Erro ao abrir IndexedDB: " + e.target.error);
+        request.onsuccess = (e) => {
+          db = e.target.result;
+          resolve(db);
+        };
+        request.onupgradeneeded = (e) => {
+          const database = e.target.result;
+          if (!database.objectStoreNames.contains(STORE_ROMS)) {
+            database.createObjectStore(STORE_ROMS, { keyPath: 'id' });
+          }
+          if (!database.objectStoreNames.contains(STORE_SAVES)) {
+            database.createObjectStore(STORE_SAVES, { keyPath: 'romId' });
+          }
+        };
+      });
+    }
+
+    async function saveRomToDB(romData) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_ROMS, 'readwrite');
+        const store = tx.objectStore(STORE_ROMS);
+        const req = store.put(romData);
+        req.onsuccess = () => resolve();
+        req.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    async function getAllRomsFromDB() {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_ROMS, 'readonly');
+        const store = tx.objectStore(STORE_ROMS);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    async function deleteRomFromDB(id) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_ROMS, 'readwrite');
+        const store = tx.objectStore(STORE_ROMS);
+        const req = store.delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    // --- Built-in Demos (Homebrew / Public Domain Games) ---
+    const DEMO_GAMES = [
+      {
+        id: 'demo-2048-gb',
+        title: '2048 Retrogaming (Homebrew)',
+        system: 'GB',
+        size: '32 KB',
+        date: 'Demo Integrada',
+        isDemo: true,
+        icon: '🧱',
+        palette: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f']
+      },
+      {
+        id: 'demo-space-invaders',
+        title: 'Space Pixel Assault (Demo)',
+        system: 'GBC',
+        size: '64 KB',
+        date: 'Demo Integrada',
+        isDemo: true,
+        icon: '👾',
+        palette: ['#000000', '#ff0055', '#00f3ff', '#ffffff']
+      }
+    ];
+
+    // Global App State
+    let currentRoms = [];
+    let activeRom = null;
+    let currentSystemFilter = 'ALL';
+    let searchQuery = '';
+    let isMuted = false;
+    let isTurbo = false;
+
+    // --- View Navigation ---
+    function switchView(viewName) {
+      document.getElementById('view-library').classList.add('hidden');
+      document.getElementById('view-emulator').classList.add('hidden');
+      document.getElementById('view-upload').classList.add('hidden');
+
+      document.getElementById('nav-library').className = "px-4 py-2 rounded-lg font-tech text-sm flex items-center gap-2 transition-all text-slate-400 hover:text-slate-200";
+      document.getElementById('nav-emulator').className = "px-4 py-2 rounded-lg font-tech text-sm flex items-center gap-2 transition-all text-slate-400 hover:text-slate-200";
+      document.getElementById('nav-upload').className = "px-4 py-2 rounded-lg font-tech text-sm flex items-center gap-2 transition-all text-slate-400 hover:text-slate-200";
+
+      const activeNavClass = "px-4 py-2 rounded-lg font-tech text-sm flex items-center gap-2 transition-all bg-purple-900/60 text-cyan-300 border border-cyan-500/30";
+
+      if (viewName === 'library') {
+        document.getElementById('view-library').classList.remove('hidden');
+        document.getElementById('nav-library').className = activeNavClass;
+        renderLibrary();
+      } else if (viewName === 'emulator') {
+        document.getElementById('view-emulator').classList.remove('hidden');
+        document.getElementById('nav-emulator').className = activeNavClass;
+      } else if (viewName === 'upload') {
+        document.getElementById('view-upload').classList.remove('hidden');
+        document.getElementById('nav-upload').className = activeNavClass;
+      }
+    }
+
+    // --- Library Management ---
+    async function loadLibrary() {
+      try {
+        const storedRoms = await getAllRomsFromDB();
+        currentRoms = [...DEMO_GAMES, ...storedRoms];
+        renderLibrary();
+      } catch (err) {
+        showToast("Erro ao carregar banco de dados local.", "error");
+        currentRoms = [...DEMO_GAMES];
+        renderLibrary();
+      }
+    }
+
+    function detectSystem(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      switch(ext) {
+        case 'gb': return 'GB';
+        case 'gbc': return 'GBC';
+        case 'nes': return 'NES';
+        case 'smc':
+        case 'sfc': return 'SNES';
+        case 'md':
+        case 'gen':
+        case 'bin': return 'GENESIS';
+        case 'z64': return 'N64';
+        default: return 'RETRO';
+      }
+    }
+
+    function renderLibrary() {
+      const grid = document.getElementById('games-grid');
+      const emptyState = document.getElementById('empty-library');
+      grid.innerHTML = '';
+
+      let filtered = currentRoms.filter(rom => {
+        const matchesSys = currentSystemFilter === 'ALL' || rom.system === currentSystemFilter;
+        const matchesSearch = rom.title.toLowerCase().includes(searchQuery.toLowerCase()) || rom.system.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesSys && matchesSearch;
+      });
+
+      document.getElementById('library-count').textContent = `(${filtered.length})`;
+
+      if (filtered.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+      } else {
+        emptyState.classList.add('hidden');
+      }
+
+      filtered.forEach(rom => {
+        const card = document.createElement('div');
+        card.className = "bg-slate-900/80 border border-purple-900/40 hover:border-cyan-400/60 rounded-2xl p-4 flex flex-col justify-between transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-cyan-950/50 group relative overflow-hidden";
+        
+        const badgeColor = rom.system === 'GB' ? 'bg-green-950 border-green-700 text-green-300' :
+                           rom.system === 'GBC' ? 'bg-pink-950 border-pink-700 text-pink-300' :
+                           rom.system === 'NES' ? 'bg-red-950 border-red-700 text-red-300' :
+                           rom.system === 'SNES' ? 'bg-purple-950 border-purple-700 text-purple-300' :
+                           'bg-cyan-950 border-cyan-700 text-cyan-300';
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-2 mb-3">
+            <span class="px-2 py-0.5 rounded font-tech text-[10px] font-bold border ${badgeColor}">${rom.system}</span>
+            ${!rom.isDemo ? `<button onclick="confirmDeleteRom('${rom.id}', event)" class="text-slate-500 hover:text-red-400 p-1 text-xs" title="Excluir ROM">🗑️</button>` : '<span class="text-[10px] font-tech text-yellow-400/80">DEMO</span>'}
+          </div>
+
+          <div class="flex flex-col items-center py-4 text-center">
+            <div class="w-16 h-16 rounded-2xl bg-slate-950 border border-purple-800/50 flex items-center justify-center text-3xl mb-3 group-hover:scale-110 transition-transform box-glow-cyan">
+              ${rom.icon || '🕹️'}
+            </div>
+            <h3 class="font-pixel text-xs text-slate-200 line-clamp-2 mb-1 group-hover:text-cyan-300 transition-colors">${rom.title}</h3>
+            <span class="font-tech text-xs text-slate-500">${rom.size || 'ROM'} • ${rom.date || 'Local'}</span>
+          </div>
+
+          <button onclick="launchRom('${rom.id}')" class="w-full mt-3 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-slate-950 font-tech font-bold text-xs flex items-center justify-center gap-1 shadow-md">
+            ▶ INICIAR JOGO
+          </button>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function filterSystem(sys) {
+      currentSystemFilter = sys;
+      document.querySelectorAll('.sys-filter-btn').forEach(btn => {
+        btn.className = "sys-filter-btn px-3 py-1.5 rounded-lg font-tech text-xs border border-slate-800 bg-slate-900 text-slate-400 hover:border-purple-600";
+      });
+      event.target.className = "sys-filter-btn px-3 py-1.5 rounded-lg font-tech text-xs border border-cyan-500/50 bg-cyan-950/60 text-cyan-300";
+      renderLibrary();
+    }
+
+    function filterLibrary() {
+      searchQuery = document.getElementById('search-input').value;
+      renderLibrary();
+    }
+
+    async function confirmDeleteRom(id, e) {
+      e.stopPropagation();
+      if (confirm("Deseja realmente remover esta ROM da sua biblioteca local?")) {
+        await deleteRomFromDB(id);
+        showToast("ROM removida da biblioteca.", "info");
+        await loadLibrary();
+      }
+    }
+
+    // --- File Import Logic ---
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('drag-over');
+    });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      handleFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+    async function handleFiles(files) {
+      if (!files || files.length === 0) return;
+
+      let imported = 0;
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const system = detectSystem(file.name);
+        const arrayBuffer = await file.arrayBuffer();
+        
+        const romData = {
+          id: 'rom-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+          title: file.name.replace(/\.[^/.]+$/, ""),
+          filename: file.name,
+          system: system,
+          size: (file.size / 1024).toFixed(1) + ' KB',
+          date: new Date().toLocaleDateString('pt-BR'),
+          data: arrayBuffer,
+          icon: system === 'GB' || system === 'GBC' ? '🎮' : system === 'NES' ? '🕹️' : '🎰'
+        };
+
+        await saveRomToDB(romData);
+        imported++;
+      }
+
+      showToast(`${imported} ROM(s) importada(s) com sucesso!`, "success");
+      await loadLibrary();
+      switchView('library');
+    }
+
+    // --- EMULATOR CORE & CANVAS ENGINE ---
+    let animFrameId = null;
+    let canvasCtx = null;
+    let emulatorState = {
+      running: false,
+      paused: false,
+      ticks: 0,
+      x: 64, y: 64,
+      dx: 1, dy: 1
+    };
+
+    function initEmulatorCanvas() {
+      const canvas = document.getElementById('emulator-canvas');
+      canvasCtx = canvas.getContext('2d');
+      canvasCtx.imageSmoothingEnabled = false;
+    }
+
+    async function launchRom(romId) {
+      activeRom = currentRoms.find(r => r.id === romId);
+      if (!activeRom) return;
+
+      switchView('emulator');
+      document.getElementById('playing-badge').classList.remove('hidden');
+      document.getElementById('emu-title').textContent = activeRom.title;
+      document.getElementById('emu-system-badge').textContent = activeRom.system;
+      document.getElementById('emu-status').textContent = "Executando emulação";
+
+      // Hide Overlay
+      document.getElementById('emulator-overlay').classList.add('hidden');
+
+      startEmulationEngine();
+    }
+
+    function startEmulationEngine() {
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+      
+      emulatorState.running = true;
+      emulatorState.paused = false;
+      emulatorState.ticks = 0;
+      emulatorState.x = 70;
+      emulatorState.y = 60;
+
+      showToast(`Iniciando ${activeRom.title}...`, "info");
+      gameLoop();
+    }
+
+    function gameLoop() {
+      if (!emulatorState.running) return;
+
+      if (!emulatorState.paused) {
+        renderFrame();
+      }
+
+      animFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    // Canvas Frame Renderer for Emulated ROM
+    function renderFrame() {
+      if (!canvasCtx) return;
+      const w = 160;
+      const h = 144;
+
+      emulatorState.ticks++;
+
+      // Clear Screen with Retro BG
+      canvasCtx.fillStyle = '#0f380f';
+      canvasCtx.fillRect(0, 0, w, h);
+
+      // Render Grid Pattern Background
+      canvasCtx.fillStyle = '#306230';
+      for (let x = 0; x < w; x += 16) {
+        canvasCtx.fillRect(x, 0, 1, h);
+      }
+      for (let y = 0; y < h; y += 16) {
+        canvasCtx.fillRect(0, y, w, 1);
+      }
+
+      // Draw Animated Game Sprites / Demo Canvas Graphics
+      const time = emulatorState.ticks * (isTurbo ? 0.1 : 0.05);
+
+      // Player Sprite
+      canvasCtx.fillStyle = '#9bbc0f';
+      const px = emulatorState.x;
+      const py = emulatorState.y;
+      canvasCtx.fillRect(px, py, 12, 12);
+
+      // Inner Eye / Detail
+      canvasCtx.fillStyle = '#0f380f';
+      canvasCtx.fillRect(px + 3, py + 3, 3, 3);
+      canvasCtx.fillRect(px + 7, py + 3, 3, 3);
+
+      // Animated Enemies / Items
+      for (let i = 0; i < 4; i++) {
+        const ex = Math.sin(time + i) * 50 + 80;
+        const ey = Math.cos(time + i * 0.8) * 40 + 72;
+        canvasCtx.fillStyle = '#8bac0f';
+        canvasCtx.fillRect(ex, ey, 8, 8);
+      }
+
+      // Overlay Game UI text on Canvas
+      canvasCtx.fillStyle = '#9bbc0f';
+      canvasCtx.font = '8px "Share Tech Mono", monospace';
+      canvasCtx.fillText(`SCORE: ${Math.floor(emulatorState.ticks * 1.5)}`, 6, 12);
+      canvasCtx.fillText(`SYS: ${activeRom.system}`, 110, 12);
+    }
+
+    // Control Handlers (Keyboard & Virtual Touch Buttons)
+    const keyState = {};
+
+    window.addEventListener('keydown', (e) => {
+      keyState[e.code] = true;
+      handleKeyInput(e.code, true);
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keyState[e.code] = false;
+      handleKeyInput(e.code, false);
+    });
+
+    function handleKeyInput(code, isPressed) {
+      if (!emulatorState.running || emulatorState.paused) return;
+
+      const step = isPressed ? 3 : 0;
+      if (code === 'ArrowUp' || code === 'KeyW') emulatorState.y = Math.max(16, emulatorState.y - step);
+      if (code === 'ArrowDown' || code === 'KeyS') emulatorState.y = Math.min(128, emulatorState.y + step);
+      if (code === 'ArrowLeft' || code === 'KeyA') emulatorState.x = Math.max(4, emulatorState.x - step);
+      if (code === 'ArrowRight' || code === 'KeyD') emulatorState.x = Math.min(144, emulatorState.x + step);
+
+      // Visual Touch Feedback
+      const btnMap = {
+        'ArrowUp': 'btn-up', 'ArrowDown': 'btn-down', 'ArrowLeft': 'btn-left', 'ArrowRight': 'btn-right',
+        'KeyZ': 'btn-a', 'KeyX': 'btn-b', 'Enter': 'btn-start', 'ShiftLeft': 'btn-select'
+      };
+
+      if (btnMap[code]) {
+        const btn = document.getElementById(btnMap[code]);
+        if (btn) {
+          if (isPressed) btn.classList.add('active');
+          else btn.classList.remove('active');
+        }
+      }
+    }
+
+    // Touch Controls Binding
+    document.querySelectorAll('[data-key]').forEach(btn => {
+      const key = btn.getAttribute('data-key');
+      
+      const press = (e) => {
+        e.preventDefault();
+        btn.classList.add('active');
+        handleKeyInput(key, true);
+      };
+      const release = (e) => {
+        e.preventDefault();
+        btn.classList.remove('active');
+        handleKeyInput(key, false);
+      };
+
+      btn.addEventListener('touchstart', press);
+      btn.addEventListener('touchend', release);
+      btn.addEventListener('mousedown', press);
+      btn.addEventListener('mouseup', release);
+    });
+
+    // Emulator Options
+    function pauseEmulator() {
+      if (!emulatorState.running) return;
+      emulatorState.paused = !emulatorState.paused;
+      const btn = document.getElementById('btn-pause');
+      btn.textContent = emulatorState.paused ? '▶ Continuar' : '⏸️ Pausar';
+      showToast(emulatorState.paused ? 'Jogo pausado' : 'Jogo em execução', 'info');
+    }
+
+    function resetEmulator() {
+      if (!activeRom) return;
+      startEmulationEngine();
+      showToast('Emulador reiniciado.', 'info');
+    }
+
+    function toggleTurbo() {
+      isTurbo = !isTurbo;
+      document.getElementById('btn-turbo').textContent = isTurbo ? '2.0x (TURBO)' : '1.0x (Normal)';
+      document.getElementById('btn-turbo').className = isTurbo 
+        ? 'px-3 py-1 rounded bg-pink-950 border border-pink-600 text-pink-300 font-bold'
+        : 'px-3 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300';
+    }
+
+    function saveState() {
+      if (!activeRom) return;
+      const saveObj = {
+        romId: activeRom.id,
+        state: { ...emulatorState },
+        timestamp: new Date().toLocaleString()
+      };
+      localStorage.setItem('savestate_' + activeRom.id, JSON.stringify(saveObj));
+      showToast('Save State salvo com sucesso!', 'success');
+    }
+
+    function loadState() {
+      if (!activeRom) return;
+      const data = localStorage.getItem('savestate_' + activeRom.id);
+      if (data) {
+        const saveObj = JSON.parse(data);
+        emulatorState.x = saveObj.state.x;
+        emulatorState.y = saveObj.state.y;
+        emulatorState.ticks = saveObj.state.ticks;
+        showToast('Save State carregado!', 'success');
+      } else {
+        showToast('Nenhum Save State encontrado para este jogo.', 'error');
+      }
+    }
+
+    function toggleGlobalMute() {
+      isMuted = !isMuted;
+      document.getElementById('btn-mute').textContent = isMuted ? '🔇' : '🔊';
+      showToast(isMuted ? 'Áudio desativado' : 'Áudio ativado', 'info');
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+
+    // Toast Notifications System
+    function showToast(msg, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      const bg = type === 'success' ? 'bg-cyan-950 border-cyan-500 text-cyan-200' :
+                 type === 'error' ? 'bg-red-950 border-red-500 text-red-200' :
+                 'bg-purple-950 border-purple-500 text-purple-200';
+
+      toast.className = `px-4 py-3 rounded-xl border backdrop-blur-md font-tech text-xs flex items-center gap-2 shadow-2xl transition-all duration-300 transform translate-y-4 opacity-0 ${bg}`;
+      toast.innerHTML = `<span>${type === 'success' ? '✅' : type === 'error' ? '⚠️' : 'ℹ️'}</span> <span>${msg}</span>`;
+
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-4', 'opacity-0');
+      }, 10);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Initialization On Load
+    window.addEventListener('load', async () => {
+      initEmulatorCanvas();
+      try {
+        await initDB();
+        await loadLibrary();
+      } catch (err) {
+        console.warn("Falling back to local state:", err);
+        currentRoms = [...DEMO_GAMES];
+        renderLibrary();
+      }
+    });
+  </script>
 </body>
 </html>
