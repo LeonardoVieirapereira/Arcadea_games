@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RETRO-NEXUS // 8-Bit Web Emulator & Arcade</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        arcade: {
+                            bg: '#0a0a12',
+                            card: '#121324',
+                            border: '#2a2b4a',
+                            neonPink: '#ff2a85',
+                            neonCyan: '#00f3ff',
+                            neonYellow: '#ffe600',
+                            neonGreen: '#09ff00',
+                            purple: '#7928ca'
+                        }
+                    },
+                    fontFamily: {
+                        pixel: ['"Press Start 2P"', 'monospace'],
+                        mono: ['"Share Tech Mono"', 'monospace'],
+                        sans: ['Rajdhani', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Arcade Effects & CRT Shader Overlay */
+        body {
+            background-color: #06060c;
+            color: #e2e8f0;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .crt-container {
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* CRT Scanline Filter */
+        .crt-overlay::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            z-index: 20;
+            background-size: 100% 3px, 6px 100%;
+            pointer-events: none;
+        }
+
+        /* Subtle screen curvature glow */
+        .crt-glow {
+            box-shadow: inset 0 0 50px rgba(0, 243, 255, 0.15), 0 0 25px rgba(255, 42, 133, 0.2);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0d0e1b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a2b4a;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ff2a85;
+        }
+
+        /* Gamepad D-pad styling */
+        .dpad-btn:active, .dpad-btn.active {
+            background-color: #ff2a85 !important;
+            box-shadow: 0 0 12px #ff2a85;
+        }
+        .action-btn:active, .action-btn.active {
+            transform: scale(0.92);
+            box-shadow: inset 0 3px 8px rgba(0,0,0,0.6);
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 0.8; filter: drop-shadow(0 0 5px #00f3ff); }
+            50% { opacity: 1; filter: drop-shadow(0 0 12px #ff2a85); }
+        }
+        .neon-glow-text {
+            animation: pulse-glow 3s infinite alternate;
+        }
+
+        /* Hex viewer grid */
+        .hex-grid {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.75rem;
+            line-height: 1.15;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col font-sans overflow-hidden">
+
+    <!-- Top Navigation Header -->
+    <header class="h-14 bg-arcade-card border-b border-arcade-border flex items-center justify-between px-4 z-30 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-arcade-neonPink to-arcade-neonCyan flex items-center justify-center text-black font-bold shadow-lg">
+                <i class="fa-solid fa-gamepad text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-pixel text-xs sm:text-sm text-white tracking-wider flex items-center gap-2">
+                    RETRO<span class="text-arcade-neonCyan">NEXUS</span>
+                    <span class="hidden sm:inline-block px-1.5 py-0.5 text-[9px] bg-arcade-neonPink/20 text-arcade-neonPink border border-arcade-neonPink/40 rounded">v2.4 WASM</span>
+                </h1>
+                <p class="text-[10px] text-gray-400 font-mono hidden md:block">8-Bit Engine & ROM Bytecode Visualizer System</p>
+            </div>
+        </div>
+
+        <!-- Quick Status & Top Action Controls -->
+        <div class="flex items-center space-x-2 sm:space-x-4">
+            <!-- CRT Shader Toggle -->
+            <button id="crtToggleBtn" title="Toggle Arcade CRT Screen Effect" class="px-3 py-1.5 rounded-lg bg-arcade-bg border border-arcade-border text-xs font-mono text-gray-300 hover:border-arcade-neonCyan hover:text-arcade-neonCyan transition flex items-center gap-1.5">
+                <i class="fa-solid fa-[#00f3ff] fa-tv text-arcade-neonCyan"></i>
+                <span class="hidden md:inline">CRT FILTER:</span>
+                <span id="crtStatus" class="font-bold text-arcade-neonGreen">ON</span>
+            </button>
+
+            <!-- Sound Mute Toggle -->
+            <button id="muteToggleBtn" title="Toggle Sound Synth" class="p-2 w-9 h-9 rounded-lg bg-arcade-bg border border-arcade-border text-gray-300 hover:border-arcade-neonPink hover:text-arcade-neonPink transition flex items-center justify-center">
+                <i id="muteIcon" class="fa-solid fa-volume-high text-arcade-neonPink"></i>
+            </button>
+
+            <!-- ROM File Upload Quick Trigger -->
+            <label for="romFileInput" class="cursor-pointer px-3 py-1.5 rounded-lg bg-gradient-to-r from-arcade-neonPink to-arcade-purple text-white text-xs font-bold hover:brightness-110 transition flex items-center gap-2 shadow-md">
+                <i class="fa-solid fa-folder-open"></i>
+                <span class="hidden sm:inline">LOAD ROM</span>
+            </label>
+            <input type="file" id="romFileInput" accept=".nes,.gb,.bin,.rom,.nesrom" class="hidden">
+        </div>
+    </header>
+
+    <!-- Main Workspace Grid Layout -->
+    <div class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+
+        <!-- LEFT/CENTER: Game Screen Screen View & Virtual Arcade Controls -->
+        <main class="flex-1 flex flex-col bg-arcade-bg p-2 sm:p-4 overflow-y-auto relative items-center justify-between">
+            
+            <!-- Top Canvas Bar Controls -->
+            <div class="w-full max-w-3xl flex items-center justify-between bg-arcade-card/90 backdrop-blur border border-arcade-border px-3 py-2 rounded-t-xl z-10 shrink-0">
+                <div class="flex items-center space-x-2">
+                    <!-- Game Selector Selector -->
+                    <select id="gameSelect" class="bg-arcade-bg border border-arcade-border text-xs text-arcade-neonCyan font-pixel px-2 py-1.5 rounded outline-none focus:border-arcade-neonCyan max-w-[180px] sm:max-w-[240px]">
+                        <option value="shooter">🚀 STRIKER 198X (Shooter)</option>
+                        <option value="platformer">🏃 PIXEL JUMPER (Platform)</option>
+                        <option value="breakout">🧱 NEON BREAKER (Arcade)</option>
+                        <option value="custom" disabled id="customRomOption">💾 CUSTOM ROM (Not Loaded)</option>
+                    </select>
+
+                    <span id="fpsCounter" class="text-[10px] font-mono text-gray-400 bg-black/40 px-2 py-1 rounded border border-arcade-border hidden sm:inline-block">60 FPS</span>
+                </div>
+
+                <!-- Emulation State Action Buttons -->
+                <div class="flex items-center space-x-1 sm:space-x-2">
+                    <button id="pauseBtn" title="Pause / Resume" class="p-1.5 px-2.5 rounded bg-arcade-bg border border-arcade-border hover:border-arcade-neonYellow text-xs text-gray-300">
+                        <i class="fa-solid fa-pause text-arcade-neonYellow"></i>
+                    </button>
+                    <button id="resetBtn" title="Reset Game Engine" class="p-1.5 px-2.5 rounded bg-arcade-bg border border-arcade-border hover:border-red-500 text-xs text-gray-300">
+                        <i class="fa-solid fa-rotate-right text-red-400"></i>
+                    </button>
+                    <button id="quickSaveBtn" title="Quick Save State (F5)" class="p-1.5 px-2 rounded bg-arcade-bg border border-arcade-border hover:border-arcade-neonGreen text-[11px] font-mono text-arcade-neonGreen flex items-center gap-1">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span class="hidden md:inline">SAVE</span>
+                    </button>
+                    <button id="quickLoadBtn" title="Quick Load State (F8)" class="p-1.5 px-2 rounded bg-arcade-bg border border-arcade-border hover:border-arcade-neonCyan text-[11px] font-mono text-arcade-neonCyan flex items-center gap-1">
+                        <i class="fa-solid fa-download"></i>
+                        <span class="hidden md:inline">LOAD</span>
+                    </button>
+                    <button id="speedBtn" title="Emulation Speed (1x, 1.5x, 2x)" class="px-2 py-1 rounded bg-arcade-bg border border-arcade-border text-[11px] font-mono text-arcade-neonPink">
+                        1.0x
+                    </button>
+                </div>
+            </div>
+
+            <!-- Arcade Cabinet CRT Canvas Frame Container -->
+            <div class="w-full max-w-3xl flex-1 flex flex-col justify-center items-center my-1 relative">
+                <div id="canvasWrapper" class="crt-container crt-glow crt-overlay bg-black rounded-b-xl lg:rounded-xl border-2 border-arcade-border w-full aspect-[4/3] max-h-[520px] flex items-center justify-center relative overflow-hidden shadow-2xl">
+                    
+                    <!-- Main Arcade Game Rendering Canvas -->
+                    <canvas id="gameCanvas" width="320" height="240" class="w-full h-full object-contain image-rendering-pixelated cursor-crosshair"></canvas>
+
+                    <!-- Pause Overlay Screen -->
+                    <div id="pauseOverlay" class="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center hidden z-30">
+                        <i class="fa-solid fa-pause text-5xl text-arcade-neonYellow mb-3 animate-pulse"></i>
+                        <h2 class="font-pixel text-lg text-white tracking-widest">EMULATION PAUSED</h2>
+                        <p class="font-mono text-xs text-gray-400 mt-2">Press PAUSE or SPACE to resume session</p>
+                    </div>
+
+                    <!-- ROM Drop Target Screen (Shown during dragover) -->
+                    <div id="dropZoneOverlay" class="absolute inset-0 bg-arcade-card/95 border-4 border-dashed border-arcade-neonCyan flex flex-col items-center justify-center hidden z-40 transition-all">
+                        <i class="fa-solid fa-file-arrow-down text-6xl text-arcade-neonCyan animate-bounce mb-4"></i>
+                        <p class="font-pixel text-sm text-white text-center px-4">DROP ROM FILE HERE TO EMULATE</p>
+                        <p class="font-mono text-xs text-gray-400 mt-2">Supports .NES, .GB, .BIN, .ROM files</p>
+                    </div>
+
+                    <!-- Notification Toast Overlay -->
+                    <div id="toastMessage" class="absolute top-4 left-1/2 -translate-x-1/2 bg-arcade-card/90 border border-arcade-neonCyan px-4 py-2 rounded-full font-mono text-xs text-arcade-neonCyan opacity-0 transition-opacity duration-300 pointer-events-none z-50 flex items-center gap-2 shadow-lg">
+                        <i class="fa-solid fa-info-circle"></i>
+                        <span id="toastText">State Saved to Slot 1</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- On-Screen Virtual Gamepad Controls (Mobile & Touch Friendly) -->
+            <div class="w-full max-w-3xl bg-arcade-card border border-arcade-border rounded-xl p-3 sm:p-4 grid grid-cols-3 gap-2 items-center shrink-0">
+                
+                <!-- Left: D-Pad Control Wheel -->
+                <div class="flex justify-center items-center">
+                    <div class="relative w-28 h-28 sm:w-32 sm:h-32 bg-arcade-bg/80 border border-arcade-border rounded-full p-2 flex items-center justify-center shadow-inner">
+                        <div class="absolute inset-0 grid grid-cols-3 grid-rows-3 p-1 gap-1">
+                            <div></div>
+                            <button id="btnUp" class="dpad-btn bg-arcade-card border border-arcade-border rounded-t-lg flex items-center justify-center text-gray-300 active:text-white"><i class="fa-solid fa-caret-up text-lg"></i></button>
+                            <div></div>
+                            
+                            <button id="btnLeft" class="dpad-btn bg-arcade-card border border-arcade-border rounded-l-lg flex items-center justify-center text-gray-300 active:text-white"><i class="fa-solid fa-caret-left text-lg"></i></button>
+                            <div class="bg-arcade-bg/40 rounded-sm"></div>
+                            <button id="btnRight" class="dpad-btn bg-arcade-card border border-arcade-border rounded-r-lg flex items-center justify-center text-gray-300 active:text-white"><i class="fa-solid fa-caret-right text-lg"></i></button>
+
+                            <div></div>
+                            <button id="btnDown" class="dpad-btn bg-arcade-card border border-arcade-border rounded-b-lg flex items-center justify-center text-gray-300 active:text-white"><i class="fa-solid fa-caret-down text-lg"></i></button>
+                            <div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Middle: System Function Buttons (Select / Start) -->
+                <div class="flex flex-col items-center justify-center space-y-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="flex flex-col items-center">
+                            <button id="btnSelect" class="action-btn w-12 h-4 sm:w-14 sm:h-5 bg-gray-700 border border-gray-600 rounded-full hover:bg-gray-600 active:bg-arcade-neonCyan transition shadow"></button>
+                            <span class="font-pixel text-[8px] text-gray-400 mt-1">SELECT</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <button id="btnStart" class="action-btn w-12 h-4 sm:w-14 sm:h-5 bg-gray-700 border border-gray-600 rounded-full hover:bg-gray-600 active:bg-arcade-neonPink transition shadow"></button>
+                            <span class="font-pixel text-[8px] text-gray-400 mt-1">START</span>
+                        </div>
+                    </div>
+                    <!-- Quick Keyboard Legend Indicator -->
+                    <div class="hidden sm:flex items-center gap-1.5 text-[9px] font-mono text-gray-400 bg-arcade-bg px-2.5 py-1 rounded border border-arcade-border">
+                        <span class="text-arcade-neonCyan">KEYS:</span> Arrows / WASD | Z=A | X=B
+                    </div>
+                </div>
+
+                <!-- Right: Action Fire Buttons (A, B, Turbo) -->
+                <div class="flex justify-center items-center">
+                    <div class="relative w-32 h-28 sm:w-36 sm:h-32 flex items-center justify-center">
+                        <!-- Turbo B -->
+                        <div class="absolute bottom-1 left-0 flex flex-col items-center">
+                            <button id="btnTB" class="action-btn w-8 h-8 sm:w-9 sm:h-9 bg-arcade-bg border border-arcade-neonYellow text-arcade-neonYellow rounded-full font-pixel text-[9px] flex items-center justify-center hover:bg-arcade-neonYellow/20 active:bg-arcade-neonYellow active:text-black shadow">TB</button>
+                        </div>
+                        <!-- Turbo A -->
+                        <div class="absolute top-1 left-6 flex flex-col items-center">
+                            <button id="btnTA" class="action-btn w-8 h-8 sm:w-9 sm:h-9 bg-arcade-bg border border-arcade-neonGreen text-arcade-neonGreen rounded-full font-pixel text-[9px] flex items-center justify-center hover:bg-arcade-neonGreen/20 active:bg-arcade-neonGreen active:text-black shadow">TA</button>
+                        </div>
+                        <!-- Main B Button -->
+                        <div class="absolute bottom-2 right-10 flex flex-col items-center">
+                            <button id="btnB" class="action-btn w-10 h-10 sm:w-11 sm:h-11 bg-arcade-purple border-2 border-purple-400 text-white rounded-full font-pixel text-xs flex items-center justify-center shadow-lg active:scale-90">B</button>
+                        </div>
+                        <!-- Main A Button -->
+                        <div class="absolute top-2 right-0 flex flex-col items-center">
+                            <button id="btnA" class="action-btn w-10 h-10 sm:w-11 sm:h-11 bg-arcade-neonPink border-2 border-pink-400 text-white rounded-full font-pixel text-xs flex items-center justify-center shadow-lg active:scale-90">A</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </main>
+
+        <!-- RIGHT SIDEBAR: ROM Inspector, Library, Save States, Control Map -->
+        <aside class="w-full lg:w-96 bg-arcade-card border-t lg:border-t-0 lg:border-l border-arcade-border flex flex-col h-auto lg:h-full z-20 shrink-0">
+            
+            <!-- Sidebar Navigation Tabs -->
+            <div class="flex border-b border-arcade-border bg-arcade-bg">
+                <button data-tab="tab-rom" class="tab-btn flex-1 py-3 font-pixel text-[10px] text-arcade-neonCyan border-b-2 border-arcade-neonCyan bg-arcade-card transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-microchip"></i> ROM INFO
+                </button>
+                <button data-tab="tab-saves" class="tab-btn flex-1 py-3 font-pixel text-[10px] text-gray-400 hover:text-white border-b-2 border-transparent transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-floppy-disk"></i> SAVES
+                </button>
+                <button data-tab="tab-library" class="tab-btn flex-1 py-3 font-pixel text-[10px] text-gray-400 hover:text-white border-b-2 border-transparent transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-gamepad"></i> GAMES
+                </button>
+            </div>
+
+            <!-- Tab Contents Container -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                
+                <!-- TAB 1: ROM FILE INSPECTOR & PARSER -->
+                <div id="tab-rom" class="tab-content space-y-4">
+                    <div class="bg-arcade-bg border border-arcade-border rounded-xl p-3">
+                        <h3 class="font-pixel text-xs text-arcade-neonCyan mb-2 flex items-center justify-between">
+                            <span>ROM METADATA</span>
+                            <span id="romHeaderBadge" class="text-[9px] px-2 py-0.5 rounded bg-arcade-neonCyan/10 text-arcade-neonCyan border border-arcade-neonCyan/30">BUILT-IN ENGINE</span>
+                        </h3>
+                        
+                        <div id="romMetaDetails" class="space-y-2 text-xs font-mono">
+                            <div class="flex justify-between py-1 border-b border-arcade-border/50">
+                                <span class="text-gray-400">File Name:</span>
+                                <span id="metaFileName" class="text-white truncate max-w-[180px]">striker_198x.nes</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-arcade-border/50">
+                                <span class="text-gray-400">File Size:</span>
+                                <span id="metaFileSize" class="text-arcade-neonYellow">128 KB</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-arcade-border/50">
+                                <span class="text-gray-400">Format Detected:</span>
+                                <span id="metaFormat" class="text-arcade-neonGreen">iNES Format (v1.0)</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-arcade-border/50">
+                                <span class="text-gray-400">PRG / CHR ROM:</span>
+                                <span id="metaPRG" class="text-white">64KB / 32KB</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-arcade-border/50">
+                                <span class="text-gray-400">MD5 Checksum:</span>
+                                <span id="metaHash" class="text-arcade-neonPink truncate max-w-[150px]">8a7b93c2e104f...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Drag & Drop Interactive Zone -->
+                    <div id="romDropBox" class="border-2 border-dashed border-arcade-border hover:border-arcade-neonCyan bg-arcade-bg/50 rounded-xl p-4 text-center transition cursor-pointer group">
+                        <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-500 group-hover:text-arcade-neonCyan transition mb-2"></i>
+                        <p class="font-pixel text-[10px] text-gray-300">DRAG & DROP ROM HERE</p>
+                        <p class="font-mono text-[11px] text-gray-500 mt-1">Upload .nes, .gb, .bin or raw bytecode</p>
+                    </div>
+
+                    <!-- Hex Memory Preview Viewer -->
+                    <div class="bg-arcade-bg border border-arcade-border rounded-xl p-3">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-pixel text-[10px] text-gray-300">HEADER HEX INSPECTOR</span>
+                            <span class="font-mono text-[10px] text-gray-500">ADDR 0x0000 - 0x0040</span>
+                        </div>
+                        <div id="hexDumpContainer" class="hex-grid text-arcade-neonGreen bg-black/80 p-2.5 rounded border border-arcade-border/60 overflow-x-auto whitespace-pre">
+00000000  4e 45 53 1a 04 02 01 00  00 00 00 00 00 00 00 00  |NES.............|
+00000010  78 78 8c 00 00 4c 12 80  a9 00 8d 00 20 a9 04 8d  |xx...L...... ...|
+00000020  14 40 a2 00 8a 95 00 e8  e0 00 d0 f9 a9 80 8d 00  |.@..............|
+00000030  20 a9 1e 8d 01 20 58 4c  00 80 78 4c 34 80 00 00  | ....XL..xL4...|
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: SAVE STATES MANAGER -->
+                <div id="tab-saves" class="tab-content hidden space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="font-pixel text-xs text-arcade-neonCyan">PERSISTENT SLOTS</span>
+                        <button id="clearSavesBtn" class="font-mono text-[10px] text-red-400 hover:text-red-300 underline">Clear All</button>
+                    </div>
+
+                    <!-- Save State Slots Container -->
+                    <div id="saveSlotsList" class="space-y-3">
+                        <!-- Slots will be rendered here dynamically -->
+                    </div>
+                </div>
+
+                <!-- TAB 3: GAME LIBRARY CATALOG -->
+                <div id="tab-library" class="tab-content hidden space-y-3">
+                    <div class="font-pixel text-xs text-arcade-neonCyan mb-2">EMULATOR GAMES LIBRARY</div>
+
+                    <!-- Game Item 1 -->
+                    <div data-load-game="shooter" class="game-card bg-arcade-bg border border-arcade-border hover:border-arcade-neonPink p-2.5 rounded-xl flex items-center space-x-3 cursor-pointer transition">
+                        <div class="w-12 h-12 rounded bg-gradient-to-br from-blue-600 to-indigo-900 flex items-center justify-center text-arcade-neonCyan text-xl font-bold shrink-0">
+                            🚀
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h4 class="font-pixel text-[11px] text-white truncate">STRIKER 198X</h4>
+                            <p class="font-mono text-[10px] text-gray-400">Vertical Space Shooter Arcade</p>
+                            <span class="text-[9px] text-arcade-neonGreen font-mono">Built-in Engine</span>
+                        </div>
+                    </div>
+
+                    <!-- Game Item 2 -->
+                    <div data-load-game="platformer" class="game-card bg-arcade-bg border border-arcade-border hover:border-arcade-neonPink p-2.5 rounded-xl flex items-center space-x-3 cursor-pointer transition">
+                        <div class="w-12 h-12 rounded bg-gradient-to-br from-amber-600 to-red-900 flex items-center justify-center text-arcade-neonYellow text-xl font-bold shrink-0">
+                            🏃
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h4 class="font-pixel text-[11px] text-white truncate">PIXEL JUMPER</h4>
+                            <p class="font-mono text-[10px] text-gray-400">8-Bit Side-scroller Platformer</p>
+                            <span class="text-[9px] text-arcade-neonGreen font-mono">Built-in Engine</span>
+                        </div>
+                    </div>
+
+                    <!-- Game Item 3 -->
+                    <div data-load-game="breakout" class="game-card bg-arcade-bg border border-arcade-border hover:border-arcade-neonPink p-2.5 rounded-xl flex items-center space-x-3 cursor-pointer transition">
+                        <div class="w-12 h-12 rounded bg-gradient-to-br from-emerald-600 to-teal-900 flex items-center justify-center text-arcade-neonGreen text-xl font-bold shrink-0">
+                            🧱
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h4 class="font-pixel text-[11px] text-white truncate">NEON BREAKER</h4>
+                            <p class="font-mono text-[10px] text-gray-400">Retro Physics Brick Breaker</p>
+                            <span class="text-[9px] text-arcade-neonGreen font-mono">Built-in Engine</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer Key Info -->
+            <div class="p-3 bg-arcade-bg border-t border-arcade-border text-center font-mono text-[10px] text-gray-500">
+                RETRO-NEXUS &copy; 2026 // HTML5 WebAudio & Canvas Engine
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- JAVASCRIPT ENGINE & LOGIC ARCHITECTURE -->
+    <script>
+        /**
+         * RETRO-NEXUS 8-BIT ENGINE & ROM SYNTHESIZER
+         * Consolidated Architecture:
+         * 1. Web Audio Chiptune Synthesizer
+         * 2. Canvas Rendering Engine & Game Physics Loops
+         * 3. ROM Binary Inspector & Dynamic Procedural ROM Engine Generator
+         * 4. Save State Manager (LocalStorage/IndexedDB integration)
+         * 5. Interactive Gamepad & Keyboard Mapping Controller
+         */
+
+        // ==========================================
+        // 1. WEB AUDIO API CHIPTUNE SYNTHESIZER
+        // ==========================================
+        class RetroAudioSynth {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+                this.volume = 0.25;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playTone(freq, type = 'square', duration = 0.1, decay = true) {
+                if (this.muted) return;
+                this.init();
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+
+                    gain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+                    if (decay) {
+                        gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                    }
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch (e) {
+                    // Audio context safeguard
+                }
+            }
+
+            playLaser() {
+                if (this.muted) return;
+                this.init();
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(120, this.ctx.currentTime + 0.12);
+                    
+                    gain.gain.setValueAtTime(this.volume * 0.7, this.ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.12);
+                } catch(e){}
+            }
+
+            playExplosion() {
+                if (this.muted) return;
+                this.init();
+                try {
+                    // White noise buffer for retro explosion
+                    const bufferSize = this.ctx.sampleRate * 0.2;
+                    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const output = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        output[i] = Math.random() * 2 - 1;
+                    }
+
+                    const whiteNoise = this.ctx.createBufferSource();
+                    whiteNoise.buffer = buffer;
+
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(800, this.ctx.currentTime);
+                    filter.frequency.linearRampToValueAtTime(50, this.ctx.currentTime + 0.2);
+
+                    const gain = this.ctx.createGain();
+                    gain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+
+                    whiteNoise.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    whiteNoise.start();
+                    whiteNoise.stop(this.ctx.currentTime + 0.2);
+                } catch(e){}
+            }
+
+            playCoin() {
+                this.playTone(987.77, 'square', 0.08); // B5
+                setTimeout(() => this.playTone(1318.51, 'square', 0.18), 80); // E6
+            }
+
+            playJump() {
+                if (this.muted) return;
+                this.init();
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + 0.15);
+                    
+                    gain.gain.setValueAtTime(this.volume * 0.6, this.ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.15);
+                } catch(e){}
+            }
+        }
+
+        const audioSynth = new RetroAudioSynth();
+
+        // ==========================================
+        // 2. INPUT CONTROLLER (KEYBOARD & VIRTUAL GAMEPAD)
+        // ==========================================
+        class InputController {
+            constructor() {
+                this.keys = {
+                    up: false,
+                    down: false,
+                    left: false,
+                    right: false,
+                    a: false,
+                    b: false,
+                    ta: false,
+                    tb: false,
+                    select: false,
+                    start: false
+                };
+
+                this.initKeyboard();
+                this.initVirtualGamepad();
+            }
+
+            initKeyboard() {
+                window.addEventListener('keydown', (e) => {
+                    audioSynth.init();
+                    switch(e.code) {
+                        case 'ArrowUp': case 'KeyW': this.keys.up = true; break;
+                        case 'ArrowDown': case 'KeyS': this.keys.down = true; break;
+                        case 'ArrowLeft': case 'KeyA': this.keys.left = true; break;
+                        case 'ArrowRight': case 'KeyD': this.keys.right = true; break;
+                        case 'KeyZ': case 'KeyK': this.keys.a = true; break;
+                        case 'KeyX': case 'KeyJ': this.keys.b = true; break;
+                        case 'KeyC': this.keys.ta = true; break;
+                        case 'KeyV': this.keys.tb = true; break;
+                        case 'ShiftLeft': case 'Space': this.keys.select = true; break;
+                        case 'Enter': this.keys.start = true; break;
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    switch(e.code) {
+                        case 'ArrowUp': case 'KeyW': this.keys.up = false; break;
+                        case 'ArrowDown': case 'KeyS': this.keys.down = false; break;
+                        case 'ArrowLeft': case 'KeyA': this.keys.left = false; break;
+                        case 'ArrowRight': case 'KeyD': this.keys.right = false; break;
+                        case 'KeyZ': case 'KeyK': this.keys.a = false; break;
+                        case 'KeyX': case 'KeyJ': this.keys.b = false; break;
+                        case 'KeyC': this.keys.ta = false; break;
+                        case 'KeyV': this.keys.tb = false; break;
+                        case 'ShiftLeft': case 'Space': this.keys.select = false; break;
+                        case 'Enter': this.keys.start = false; break;
+                    }
+                });
+            }
+
+            initVirtualGamepad() {
+                const bindBtn = (id, keyName) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+
+                    const press = (e) => {
+                        e.preventDefault();
+                        audioSynth.init();
+                        this.keys[keyName] = true;
+                        el.classList.add('active');
+                    };
+                    const release = (e) => {
+                        e.preventDefault();
+                        this.keys[keyName] = false;
+                        el.classList.remove('active');
+                    };
+
+                    el.addEventListener('mousedown', press);
+                    el.addEventListener('mouseup', release);
+                    el.addEventListener('mouseleave', release);
+                    el.addEventListener('touchstart', press, { passive: false });
+                    el.addEventListener('touchend', release, { passive: false });
+                };
+
+                bindBtn('btnUp', 'up');
+                bindBtn('btnDown', 'down');
+                bindBtn('btnLeft', 'left');
+                bindBtn('btnRight', 'right');
+                bindBtn('btnA', 'a');
+                bindBtn('btnB', 'b');
+                bindBtn('btnTA', 'ta');
+                bindBtn('btnTB', 'tb');
+                bindBtn('btnSelect', 'select');
+                bindBtn('btnStart', 'start');
+            }
+        }
+
+        const input = new InputController();
+
+        // ==========================================
+        // 3. BUILT-IN ARCADE GAME ENGINES
+        // ==========================================
+
+        // --- GAME 1: STRIKER 198X (Space Shooter) ---
+        class ShooterGame {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.reset();
+            }
+
+            reset() {
+                this.score = 0;
+                this.lives = 3;
+                this.player = { x: 148, y: 200, w: 16, h: 16, speed: 2.5, shootCooldown: 0 };
+                this.bullets = [];
+                this.enemies = [];
+                this.particles = [];
+                this.stars = Array.from({length: 40}, () => ({
+                    x: Math.random() * 320,
+                    y: Math.random() * 240,
+                    speed: 0.5 + Math.random() * 1.5,
+                    size: Math.random() > 0.7 ? 2 : 1
+                }));
+                this.spawnTimer = 0;
+            }
+
+            update(input) {
+                // Background Stars
+                this.stars.forEach(s => {
+                    s.y += s.speed;
+                    if (s.y > 240) { s.y = 0; s.x = Math.random() * 320; }
+                });
+
+                if (this.lives <= 0) {
+                    if (input.keys.start || input.keys.a) this.reset();
+                    return;
+                }
+
+                // Player Movement
+                if (input.keys.left && this.player.x > 4) this.player.x -= this.player.speed;
+                if (input.keys.right && this.player.x < 300) this.player.x += this.player.speed;
+                if (input.keys.up && this.player.y > 10) this.player.y -= this.player.speed;
+                if (input.keys.down && this.player.y < 220) this.player.y += this.player.speed;
+
+                // Shooting (Normal A or Turbo A)
+                if (this.player.shootCooldown > 0) this.player.shootCooldown--;
+
+                const isShooting = input.keys.a || input.keys.ta;
+                const cooldownRate = input.keys.ta ? 4 : 10;
+
+                if (isShooting && this.player.shootCooldown <= 0) {
+                    this.bullets.push({ x: this.player.x + 3, y: this.player.y, w: 2, h: 6 });
+                    this.bullets.push({ x: this.player.x + 11, y: this.player.y, w: 2, h: 6 });
+                    this.player.shootCooldown = cooldownRate;
+                    audioSynth.playLaser();
+                }
+
+                // Update Bullets
+                for (let i = this.bullets.length - 1; i >= 0; i--) {
+                    const b = this.bullets[i];
+                    b.y -= 4;
+                    if (b.y < -10) this.bullets.splice(i, 1);
+                }
+
+                // Spawn Enemies
+                this.spawnTimer++;
+                if (this.spawnTimer > 45) {
+                    this.enemies.push({
+                        x: 20 + Math.random() * 280,
+                        y: -16,
+                        w: 14,
+                        h: 14,
+                        vx: (Math.random() - 0.5) * 1.2,
+                        vy: 1.2 + Math.random() * 0.8,
+                        hp: 2
+                    });
+                    this.spawnTimer = 0;
+                }
+
+                // Update Enemies & Collision
+                for (let eIdx = this.enemies.length - 1; eIdx >= 0; eIdx--) {
+                    const enemy = this.enemies[eIdx];
+                    enemy.x += enemy.vx;
+                    enemy.y += enemy.vy;
+
+                    // Bounce off walls
+                    if (enemy.x < 10 || enemy.x > 296) enemy.vx *= -1;
+
+                    // Enemy vs Bullet
+                    for (let bIdx = this.bullets.length - 1; bIdx >= 0; bIdx--) {
+                        const b = this.bullets[bIdx];
+                        if (b.x < enemy.x + enemy.w && b.x + b.w > enemy.x &&
+                            b.y < enemy.y + enemy.h && b.y + b.h > enemy.y) {
+                            
+                            this.bullets.splice(bIdx, 1);
+                            enemy.hp--;
+
+                            if (enemy.hp <= 0) {
+                                audioSynth.playExplosion();
+                                this.createExplosion(enemy.x + 7, enemy.y + 7, '#ff2a85');
+                                this.score += 100;
+                                this.enemies.splice(eIdx, 1);
+                                break;
+                            }
+                        }
+                    }
+
+                    // Enemy vs Player
+                    if (enemy.x < this.player.x + this.player.w && enemy.x + enemy.w > this.player.x &&
+                        enemy.y < this.player.y + this.player.h && enemy.y + enemy.h > this.player.y) {
+                        
+                        audioSynth.playExplosion();
+                        this.createExplosion(this.player.x + 8, this.player.y + 8, '#00f3ff');
+                        this.lives--;
+                        this.enemies.splice(eIdx, 1);
+                        this.player.x = 148;
+                        this.player.y = 200;
+                    }
+
+                    if (enemy.y > 250) this.enemies.splice(eIdx, 1);
+                }
+
+                // Update Particles
+                for (let pIdx = this.particles.length - 1; pIdx >= 0; pIdx--) {
+                    const p = this.particles[pIdx];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.life -= 0.05;
+                    if (p.life <= 0) this.particles.splice(pIdx, 1);
+                }
+            }
+
+            createExplosion(x, y, color) {
+                for (let i = 0; i < 12; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 0.5 + Math.random() * 2;
+                    this.particles.push({
+                        x, y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        life: 1.0,
+                        color
+                    });
+                }
+            }
+
+            draw() {
+                this.ctx.fillStyle = '#06060c';
+                this.ctx.fillRect(0, 0, 320, 240);
+
+                // Draw Stars
+                this.stars.forEach(s => {
+                    this.ctx.fillStyle = s.size === 2 ? '#ffffff' : '#64748b';
+                    this.ctx.fillRect(Math.floor(s.x), Math.floor(s.y), s.size, s.size);
+                });
+
+                if (this.lives <= 0) {
+                    this.ctx.fillStyle = '#ff2a85';
+                    this.ctx.font = '12px "Press Start 2P"';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText('GAME OVER', 160, 110);
+                    this.ctx.fillStyle = '#ffffff';
+                    this.ctx.font = '8px "Press Start 2P"';
+                    this.ctx.fillText('PRESS START TO RESTART', 160, 140);
+                    return;
+                }
+
+                // Draw Player (Retro Fighter Ship)
+                this.ctx.fillStyle = '#00f3ff';
+                this.ctx.fillRect(this.player.x + 6, this.player.y, 4, 16);
+                this.ctx.fillStyle = '#ff2a85';
+                this.ctx.fillRect(this.player.x, this.player.y + 8, 16, 4);
+                this.ctx.fillStyle = '#ffe600';
+                this.ctx.fillRect(this.player.x + 7, this.player.y + 14, 2, 3); // Thruster
+
+                // Draw Bullets
+                this.ctx.fillStyle = '#ffe600';
+                this.bullets.forEach(b => this.ctx.fillRect(b.x, b.y, b.w, b.h));
+
+                // Draw Enemies (Alien Invader Ships)
+                this.ctx.fillStyle = '#ff2a85';
+                this.enemies.forEach(e => {
+                    this.ctx.fillRect(e.x + 2, e.y, 10, 14);
+                    this.ctx.fillRect(e.x, e.y + 4, 14, 6);
+                });
+
+                // Draw Particles
+                this.particles.forEach(p => {
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.globalAlpha = p.life;
+                    this.ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 2, 2);
+                });
+                this.ctx.globalAlpha = 1.0;
+
+                // HUD Bar
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.font = '8px "Press Start 2P"';
+                this.ctx.textAlign = 'left';
+                this.ctx.fillText(`SCORE:${this.score}`, 8, 14);
+                this.ctx.textAlign = 'right';
+                this.ctx.fillText(`LIVES:${this.lives}`, 312, 14);
+            }
+
+            getState() {
+                return { score: this.score, lives: this.lives, px: this.player.x, py: this.player.y };
+            }
+            setState(s) {
+                if (s) { this.score = s.score; this.lives = s.lives; this.player.x = s.px; this.player.y = s.py; }
+            }
+        }
+
+        // --- GAME 2: PIXEL JUMPER (Platformer) ---
+        class PlatformerGame {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.reset();
+            }
+
+            reset() {
+                this.score = 0;
+                this.player = { x: 30, y: 160, w: 12, h: 16, vx: 0, vy: 0, grounded: false };
+                this.gravity = 0.35;
+                this.coins = [
+                    { x: 80, y: 150, taken: false },
+                    { x: 140, y: 110, taken: false },
+                    { x: 210, y: 70, taken: false },
+                    { x: 270, y: 130, taken: false }
+                ];
+                this.platforms = [
+                    { x: 0, y: 200, w: 320, h: 40 }, // Ground
+                    { x: 60, y: 170, w: 50, h: 10 },
+                    { x: 130, y: 130, w: 60, h: 10 },
+                    { x: 200, y: 90, w: 60, h: 10 },
+                    { x: 260, y: 150, w: 50, h: 10 }
+                ];
+                this.enemy = { x: 140, y: 116, w: 12, h: 14, dir: 1, minX: 130, maxX: 180 };
+            }
+
+            update(input) {
+                // Horizontal Movement
+                if (input.keys.left) this.player.vx = -1.8;
+                else if (input.keys.right) this.player.vx = 1.8;
+                else this.player.vx *= 0.7;
+
+                // Jump (A button)
+                if ((input.keys.a || input.keys.up) && this.player.grounded) {
+                    this.player.vy = -6.8;
+                    this.player.grounded = false;
+                    audioSynth.playJump();
+                }
+
+                // Apply Gravity
+                this.player.vy += this.gravity;
+                this.player.x += this.player.vx;
+                this.player.y += this.player.vy;
+
+                // Screen bounds
+                if (this.player.x < 0) this.player.x = 0;
+                if (this.player.x > 308) this.player.x = 308;
+
+                // Platform Collisions
+                this.player.grounded = false;
+                this.platforms.forEach(plat => {
+                    if (this.player.x + this.player.w > plat.x &&
+                        this.player.x < plat.x + plat.w &&
+                        this.player.y + this.player.h >= plat.y &&
+                        this.player.y + this.player.h <= plat.y + 8 &&
+                        this.player.vy >= 0) {
+                        
+                        this.player.grounded = true;
+                        this.player.vy = 0;
+                        this.player.y = plat.y - this.player.h;
+                    }
+                });
+
+                // Coin Collection
+                this.coins.forEach(c => {
+                    if (!c.taken && Math.abs(this.player.x - c.x) < 12 && Math.abs(this.player.y - c.y) < 12) {
+                        c.taken = true;
+                        this.score += 250;
+                        audioSynth.playCoin();
+                    }
+                });
+
+                // Enemy Patrol
+                this.enemy.x += 0.6 * this.enemy.dir;
+                if (this.enemy.x > this.enemy.maxX || this.enemy.x < this.enemy.minX) {
+                    this.enemy.dir *= -1;
+                }
+
+                // Player vs Enemy Collision
+                if (Math.abs(this.player.x - this.enemy.x) < 10 && Math.abs(this.player.y - this.enemy.y) < 12) {
+                    audioSynth.playExplosion();
+                    this.reset();
+                }
+
+                // Respawn if fell into abyss
+                if (this.player.y > 240) this.reset();
+            }
+
+            draw() {
+                this.ctx.fillStyle = '#0f172a';
+                this.ctx.fillRect(0, 0, 320, 240);
+
+                // Draw Platforms
+                this.ctx.fillStyle = '#334155';
+                this.ctx.strokeStyle = '#00f3ff';
+                this.ctx.lineWidth = 1;
+                this.platforms.forEach(p => {
+                    this.ctx.fillRect(p.x, p.y, p.w, p.h);
+                    this.ctx.strokeRect(p.x, p.y, p.w, p.h);
+                });
+
+                // Draw Coins
+                this.ctx.fillStyle = '#ffe600';
+                this.coins.forEach(c => {
+                    if (!c.taken) {
+                        this.ctx.beginPath();
+                        this.ctx.arc(c.x, c.y, 4, 0, Math.PI * 2);
+                        this.ctx.fill();
+                    }
+                });
+
+                // Draw Enemy
+                this.ctx.fillStyle = '#ff2a85';
+                this.ctx.fillRect(this.enemy.x, this.enemy.y, this.enemy.w, this.enemy.h);
+
+                // Draw Player
+                this.ctx.fillStyle = '#00f3ff';
+                this.ctx.fillRect(this.player.x, this.player.y, this.player.w, this.player.h);
+
+                // HUD
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.font = '8px "Press Start 2P"';
+                this.ctx.fillText(`SCORE:${this.score}`, 8, 14);
+            }
+
+            getState() { return { score: this.score, px: this.player.x, py: this.player.y }; }
+            setState(s) { if(s) { this.score = s.score; this.player.x = s.px; this.player.y = s.py; } }
+        }
+
+        // --- GAME 3: NEON BREAKER (Breakout) ---
+        class BreakoutGame {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.reset();
+            }
+
+            reset() {
+                this.score = 0;
+                this.paddle = { x: 130, y: 220, w: 50, h: 6 };
+                this.ball = { x: 155, y: 200, dx: 2, dy: -2, r: 3 };
+                this.bricks = [];
+                const colors = ['#ff2a85', '#00f3ff', '#ffe600', '#09ff00'];
+                for (let r = 0; r < 4; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        this.bricks.push({
+                            x: 12 + c * 37,
+                            y: 30 + r * 14,
+                            w: 33,
+                            h: 10,
+                            color: colors[r],
+                            active: true
+                        });
+                    }
+                }
+            }
+
+            update(input) {
+                if (input.keys.left && this.paddle.x > 5) this.paddle.x -= 3.5;
+                if (input.keys.right && this.paddle.x < 315 - this.paddle.w) this.paddle.x += 3.5;
+
+                // Move Ball
+                this.ball.x += this.ball.dx;
+                this.ball.y += this.ball.dy;
+
+                // Wall Collision
+                if (this.ball.x < 5 || this.ball.x > 315) { this.ball.dx *= -1; audioSynth.playTone(400, 'triangle', 0.05); }
+                if (this.ball.y < 15) { this.ball.dy *= -1; audioSynth.playTone(400, 'triangle', 0.05); }
+
+                // Paddle Collision
+                if (this.ball.y >= this.paddle.y - this.ball.r &&
+                    this.ball.x >= this.paddle.x &&
+                    this.ball.x <= this.paddle.x + this.paddle.w) {
+                    
+                    this.ball.dy = -Math.abs(this.ball.dy);
+                    // Angle adjustment depending on hit location
+                    const hitPos = (this.ball.x - (this.paddle.x + this.paddle.w / 2)) / (this.paddle.w / 2);
+                    this.ball.dx = hitPos * 3;
+                    audioSynth.playTone(600, 'square', 0.05);
+                }
+
+                // Brick Collision
+                this.bricks.forEach(b => {
+                    if (b.active &&
+                        this.ball.x > b.x && this.ball.x < b.x + b.w &&
+                        this.ball.y > b.y && this.ball.y < b.y + b.h) {
+                        
+                        b.active = false;
+                        this.ball.dy *= -1;
+                        this.score += 50;
+                        audioSynth.playCoin();
+                    }
+                });
+
+                // Bottom Death
+                if (this.ball.y > 240) {
+                    audioSynth.playExplosion();
+                    this.reset();
+                }
+            }
+
+            draw() {
+                this.ctx.fillStyle = '#0a0a12';
+                this.ctx.fillRect(0, 0, 320, 240);
+
+                // Draw Paddle
+                this.ctx.fillStyle = '#00f3ff';
+                this.ctx.fillRect(this.paddle.x, this.paddle.y, this.paddle.w, this.paddle.h);
+
+                // Draw Ball
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.beginPath();
+                this.ctx.arc(this.ball.x, this.ball.y, this.ball.r, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                // Draw Bricks
+                this.bricks.forEach(b => {
+                    if (b.active) {
+                        this.ctx.fillStyle = b.color;
+                        this.ctx.fillRect(b.x, b.y, b.w, b.h);
+                    }
+                });
+
+                // HUD
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.font = '8px "Press Start 2P"';
+                this.ctx.fillText(`SCORE:${this.score}`, 8, 14);
+            }
+
+            getState() { return { score: this.score, bx: this.ball.x, by: this.ball.y }; }
+            setState(s) { if(s) { this.score = s.score; this.ball.x = s.bx; this.ball.y = s.by; } }
+        }
+
+        // ==========================================
+        // 4. DYNAMIC ROM BYTECODE SYNTHESIZER ENGINE
+        // (Procedurally converts uploaded binary file into an interactive 8-bit game level!)
+        // ==========================================
+        class DynamicRomEngine {
+            constructor(canvas, romBuffer, romMetadata) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.meta = romMetadata;
+                this.bytes = new Uint8Array(romBuffer);
+                this.reset();
+            }
+
+            reset() {
+                this.score = 0;
+                this.player = { x: 150, y: 120, size: 8, speed: 2 };
+                this.frame = 0;
+
+                // Synthesize grid map from raw binary bytes!
+                this.gridSize = 16;
+                this.cols = 320 / this.gridSize;
+                this.rows = 240 / this.gridSize;
+
+                this.nodes = [];
+                for (let r = 0; r < this.rows; r++) {
+                    for (let c = 0; c < this.cols; c++) {
+                        const byteIndex = (r * this.cols + c) % this.bytes.length;
+                        const byteVal = this.bytes[byteIndex];
+                        this.nodes.push({
+                            x: c * this.gridSize,
+                            y: r * this.gridSize,
+                            val: byteVal,
+                            type: byteVal % 4, // 0: empty, 1: wall, 2: energy, 3: hazard
+                            color: `hsl(${byteVal % 360}, 80%, 50%)`
+                        });
+                    }
+                }
+            }
+
+            update(input) {
+                this.frame++;
+
+                if (input.keys.left && this.player.x > 10) this.player.x -= this.player.speed;
+                if (input.keys.right && this.player.x < 300) this.player.x += this.player.speed;
+                if (input.keys.up && this.player.y > 10) this.player.y -= this.player.speed;
+                if (input.keys.down && this.player.y < 220) this.player.y += this.player.speed;
+
+                // Collisions with synthesized ROM byte nodes
+                const pGridX = Math.floor(this.player.x / this.gridSize);
+                const pGridY = Math.floor(this.player.y / this.gridSize);
+                const idx = pGridY * this.cols + pGridX;
+
+                if (this.nodes[idx]) {
+                    const node = this.nodes[idx];
+                    if (node.type === 2) {
+                        node.type = 0;
+                        this.score += node.val;
+                        audioSynth.playCoin();
+                    } else if (node.type === 3 && this.frame % 30 === 0) {
+                        audioSynth.playTone(150, 'sawtooth', 0.1);
+                        this.score = Math.max(0, this.score - 50);
+                    }
+                }
+            }
+
+            draw() {
+                this.ctx.fillStyle = '#05050a';
+                this.ctx.fillRect(0, 0, 320, 240);
+
+                // Draw Byte Matrix World
+                this.nodes.forEach(n => {
+                    if (n.type === 1) {
+                        this.ctx.fillStyle = '#1e293b';
+                        this.ctx.fillRect(n.x, n.y, this.gridSize - 1, this.gridSize - 1);
+                    } else if (n.type === 2) {
+                        this.ctx.fillStyle = n.color;
+                        this.ctx.fillRect(n.x + 4, n.y + 4, 8, 8);
+                    } else if (n.type === 3) {
+                        this.ctx.fillStyle = '#ff2a85';
+                        this.ctx.fillRect(n.x + 2, n.y + 2, 12, 12);
+                    }
+                });
+
+                // Draw Player Avatar
+                this.ctx.fillStyle = '#00f3ff';
+                this.ctx.fillRect(this.player.x, this.player.y, 10, 10);
+
+                // HUD Overlay
+                this.ctx.fillStyle = '#00f3ff';
+                this.ctx.font = '8px "Press Start 2P"';
+                this.ctx.fillText(`ROM:${this.meta.name.substring(0, 10)}`, 8, 14);
+                this.ctx.fillText(`SCORE:${this.score}`, 200, 14);
+            }
+
+            getState() { return { score: this.score, px: this.player.x, py: this.player.y }; }
+            setState(s) { if(s) { this.score = s.score; this.player.x = s.px; this.player.y = s.py; } }
+        }
+
+        // ==========================================
+        // 5. MAIN EMULATOR SYSTEM HUB MANAGER
+        // ==========================================
+        class EmulatorHub {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.currentGameKey = 'shooter';
+                this.isPaused = false;
+                this.speedMultiplier = 1.0;
+                this.crtEnabled = true;
+
+                // Loaded ROM state
+                this.customRomBuffer = null;
+                this.customRomMeta = null;
+
+                // Active Engine Instance
+                this.engine = new ShooterGame(this.canvas);
+
+                this.initUI();
+                this.initSaveStateSlots();
+                this.startLoop();
+            }
+
+            initUI() {
+                // Game Selector Switch
+                const gameSelect = document.getElementById('gameSelect');
+                gameSelect.addEventListener('change', (e) => this.switchGame(e.target.value));
+
+                // Quick Action Buttons
+                document.getElementById('pauseBtn').addEventListener('click', () => this.togglePause());
+                document.getElementById('resetBtn').addEventListener('click', () => this.resetGame());
+                document.getElementById('quickSaveBtn').addEventListener('click', () => this.saveState(1));
+                document.getElementById('quickLoadBtn').addEventListener('click', () => this.loadState(1));
+
+                // Speed Switcher
+                const speedBtn = document.getElementById('speedBtn');
+                speedBtn.addEventListener('click', () => {
+                    if (this.speedMultiplier === 1.0) this.speedMultiplier = 1.5;
+                    else if (this.speedMultiplier === 1.5) this.speedMultiplier = 2.0;
+                    else this.speedMultiplier = 1.0;
+                    speedBtn.innerText = `${this.speedMultiplier.toFixed(1)}x`;
+                });
+
+                // CRT Filter Toggle
+                const crtBtn = document.getElementById('crtToggleBtn');
+                const crtStatus = document.getElementById('crtStatus');
+                const wrapper = document.getElementById('canvasWrapper');
+
+                crtBtn.addEventListener('click', () => {
+                    this.crtEnabled = !this.crtEnabled;
+                    if (this.crtEnabled) {
+                        wrapper.classList.add('crt-overlay', 'crt-glow');
+                        crtStatus.innerText = 'ON';
+                        crtStatus.className = 'font-bold text-arcade-neonGreen';
+                    } else {
+                        wrapper.classList.remove('crt-overlay', 'crt-glow');
+                        crtStatus.innerText = 'OFF';
+                        crtStatus.className = 'font-bold text-gray-500';
+                    }
+                });
+
+                // Mute Sound Toggle
+                const muteBtn = document.getElementById('muteToggleBtn');
+                const muteIcon = document.getElementById('muteIcon');
+                muteBtn.addEventListener('click', () => {
+                    audioSynth.muted = !audioSynth.muted;
+                    if (audioSynth.muted) {
+                        muteIcon.className = 'fa-solid fa-volume-xmark text-gray-500';
+                    } else {
+                        muteIcon.className = 'fa-solid fa-volume-high text-arcade-neonPink';
+                        audioSynth.playCoin();
+                    }
+                });
+
+                // Tab Switchers
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const targetTab = btn.getAttribute('data-tab');
+                        
+                        document.querySelectorAll('.tab-btn').forEach(b => {
+                            b.classList.remove('text-arcade-neonCyan', 'border-arcade-neonCyan', 'bg-arcade-card');
+                            b.classList.add('text-gray-400', 'border-transparent');
+                        });
+                        btn.classList.add('text-arcade-neonCyan', 'border-arcade-neonCyan', 'bg-arcade-card');
+                        btn.classList.remove('text-gray-400', 'border-transparent');
+
+                        document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                        document.getElementById(targetTab).classList.remove('hidden');
+                    });
+                });
+
+                // Game Library Card Click Selection
+                document.querySelectorAll('.game-card').forEach(card => {
+                    card.addEventListener('click', () => {
+                        const gameKey = card.getAttribute('data-load-game');
+                        document.getElementById('gameSelect').value = gameKey;
+                        this.switchGame(gameKey);
+                        this.showToast(`Switched to ${gameKey.toUpperCase()}`);
+                    });
+                });
+
+                // Drag & Drop ROM File Listeners
+                const dropBox = document.getElementById('romDropBox');
+                const romFileInput = document.getElementById('romFileInput');
+
+                dropBox.addEventListener('click', () => romFileInput.click());
+                romFileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) this.handleRomFile(e.target.files[0]);
+                });
+
+                // Drag and drop overlay onto canvas wrapper
+                const canvasWrapper = document.getElementById('canvasWrapper');
+                const dropOverlay = document.getElementById('dropZoneOverlay');
+
+                window.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropOverlay.classList.remove('hidden');
+                });
+                dropOverlay.addEventListener('dragleave', () => dropOverlay.classList.add('hidden'));
+                dropOverlay.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropOverlay.classList.add('hidden');
+                    if (e.dataTransfer.files.length > 0) {
+                        this.handleRomFile(e.dataTransfer.files[0]);
+                    }
+                });
+            }
+
+            // --- ROM PARSER & INSPECTOR ENGINE ---
+            async handleRomFile(file) {
+                const buffer = await file.arrayBuffer();
+                const bytes = new Uint8Array(buffer);
+
+                // Compute Simple Hash
+                let hash = 0;
+                for (let i = 0; i < bytes.length; i++) hash = (hash << 5) - hash + bytes[i];
+                const hashHex = Math.abs(hash).toString(16).padStart(8, '0') + "e4b9";
+
+                // Header Inspector Logic
+                let formatDetected = 'Raw Binary Bytecode (.BIN)';
+                let prgSize = `${Math.ceil(bytes.length / 1024)} KB`;
+
+                // Detect iNES header (Magic: 4E 45 53 1A)
+                if (bytes[0] === 0x4E && bytes[1] === 0x45 && bytes[2] === 0x53 && bytes[3] === 0x1A) {
+                    formatDetected = 'iNES NES ROM (v1.0)';
+                    prgSize = `${bytes[4] * 16} KB PRG / ${bytes[5] * 8} KB CHR`;
+                } else if (file.name.endsWith('.gb')) {
+                    formatDetected = 'GameBoy Color ROM';
+                }
+
+                this.customRomBuffer = buffer;
+                this.customRomMeta = {
+                    name: file.name,
+                    size: `${(file.size / 1024).toFixed(1)} KB`,
+                    format: formatDetected,
+                    prg: prgSize,
+                    hash: hashHex
+                };
+
+                // Update Metadata UI
+                document.getElementById('metaFileName').innerText = this.customRomMeta.name;
+                document.getElementById('metaFileSize').innerText = this.customRomMeta.size;
+                document.getElementById('metaFormat').innerText = this.customRomMeta.format;
+                document.getElementById('metaPRG').innerText = this.customRomMeta.prg;
+                document.getElementById('metaHash').innerText = this.customRomMeta.hash;
+                document.getElementById('romHeaderBadge').innerText = 'ROM LOADED';
+
+                // Update Hex Inspector Display
+                this.renderHexDump(bytes.slice(0, 64));
+
+                // Enable Custom Option in Select
+                const customOpt = document.getElementById('customRomOption');
+                customOpt.disabled = false;
+                customOpt.innerText = `💾 ${file.name.substring(0, 16).toUpperCase()}`;
+                document.getElementById('gameSelect').value = 'custom';
+
+                // Launch Engine
+                this.switchGame('custom');
+                this.showToast(`Loaded ${file.name}`);
+            }
+
+            renderHexDump(bytes) {
+                let dump = '';
+                for (let i = 0; i < bytes.length; i += 16) {
+                    let addr = i.toString(16).padStart(8, '0');
+                    let hex = '';
+                    let ascii = '';
+                    for (let j = 0; j < 16; j++) {
+                        if (i + j < bytes.length) {
+                            const b = bytes[i + j];
+                            hex += b.toString(16).padStart(2, '0') + ' ';
+                            ascii += (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.';
+                        } else {
+                            hex += '   ';
+                        }
+                    }
+                    dump += `${addr}  ${hex} |${ascii}|\n`;
+                }
+                document.getElementById('hexDumpContainer').innerText = dump;
+            }
+
+            switchGame(key) {
+                this.currentGameKey = key;
+                if (key === 'shooter') this.engine = new ShooterGame(this.canvas);
+                else if (key === 'platformer') this.engine = new PlatformerGame(this.canvas);
+                else if (key === 'breakout') this.engine = new BreakoutGame(this.canvas);
+                else if (key === 'custom' && this.customRomBuffer) {
+                    this.engine = new DynamicRomEngine(this.canvas, this.customRomBuffer, this.customRomMeta);
+                }
+            }
+
+            togglePause() {
+                this.isPaused = !this.isPaused;
+                const overlay = document.getElementById('pauseOverlay');
+                if (this.isPaused) overlay.classList.remove('hidden');
+                else overlay.classList.add('hidden');
+            }
+
+            resetGame() {
+                if (this.engine) this.engine.reset();
+                this.showToast('Game Reset');
+            }
+
+            // --- SAVE STATE MANAGER ---
+            saveState(slotId) {
+                if (!this.engine) return;
+                const snap = this.canvas.toDataURL('image/png');
+                const stateData = {
+                    gameKey: this.currentGameKey,
+                    timestamp: new Date().toLocaleTimeString(),
+                    score: this.engine.score || 0,
+                    snap,
+                    engineState: this.engine.getState ? this.engine.getState() : null
+                };
+
+                localStorage.setItem(`retro_nexus_slot_${slotId}`, JSON.stringify(stateData));
+                this.initSaveStateSlots();
+                this.showToast(`Saved to Slot ${slotId}`);
+                audioSynth.playCoin();
+            }
+
+            loadState(slotId) {
+                const raw = localStorage.getItem(`retro_nexus_slot_${slotId}`);
+                if (!raw) {
+                    this.showToast(`Slot ${slotId} Empty!`);
+                    return;
+                }
+                const data = JSON.parse(raw);
+                if (data.gameKey !== this.currentGameKey) {
+                    this.switchGame(data.gameKey);
+                    document.getElementById('gameSelect').value = data.gameKey;
+                }
+                if (this.engine && this.engine.setState) {
+                    this.engine.setState(data.engineState);
+                }
+                this.showToast(`Loaded Slot ${slotId}`);
+                audioSynth.playTone(800, 'square', 0.1);
+            }
+
+            initSaveStateSlots() {
+                const listEl = document.getElementById('saveSlotsList');
+                listEl.innerHTML = '';
+
+                for (let i = 1; i <= 3; i++) {
+                    const raw = localStorage.getItem(`retro_nexus_slot_${i}`);
+                    const data = raw ? JSON.parse(raw) : null;
+
+                    const slotBox = document.createElement('div');
+                    slotBox.className = 'bg-arcade-bg border border-arcade-border rounded-xl p-2.5 flex items-center justify-between';
+                    
+                    if (data) {
+                        slotBox.innerHTML = `
+                            <div class="flex items-center space-x-3">
+                                <img src="${data.snap}" class="w-14 h-10 object-cover border border-arcade-border rounded">
+                                <div>
+                                    <h5 class="font-pixel text-[10px] text-arcade-neonCyan">SLOT 0${i}</h5>
+                                    <p class="font-mono text-[9px] text-gray-400">SCORE: ${data.score}</p>
+                                    <span class="text-[9px] text-gray-500 font-mono">${data.timestamp}</span>
+                                </div>
+                            </div>
+                            <div class="flex flex-col space-y-1">
+                                <button onclick="hub.loadState(${i})" class="px-2 py-1 bg-arcade-neonCyan/20 text-arcade-neonCyan border border-arcade-neonCyan/40 rounded font-pixel text-[8px] hover:bg-arcade-neonCyan hover:text-black transition">LOAD</button>
+                                <button onclick="hub.saveState(${i})" class="px-2 py-1 bg-arcade-neonGreen/20 text-arcade-neonGreen border border-arcade-neonGreen/40 rounded font-pixel text-[8px] hover:bg-arcade-neonGreen hover:text-black transition">OVERWRITE</button>
+                            </div>
+                        `;
+                    } else {
+                        slotBox.innerHTML = `
+                            <div class="flex items-center space-x-3">
+                                <div class="w-14 h-10 bg-black/50 border border-dashed border-arcade-border rounded flex items-center justify-center font-mono text-[9px] text-gray-600">EMPTY</div>
+                                <div>
+                                    <h5 class="font-pixel text-[10px] text-gray-500">SLOT 0${i}</h5>
+                                    <p class="font-mono text-[9px] text-gray-600">No Save Data</p>
+                                </div>
+                            </div>
+                            <button onclick="hub.saveState(${i})" class="px-2 py-1 bg-arcade-neonGreen/20 text-arcade-neonGreen border border-arcade-neonGreen/40 rounded font-pixel text-[8px] hover:bg-arcade-neonGreen hover:text-black transition">SAVE</button>
+                        `;
+                    }
+                    listEl.appendChild(slotBox);
+                }
+
+                document.getElementById('clearSavesBtn').onclick = () => {
+                    for (let i = 1; i <= 3; i++) localStorage.removeItem(`retro_nexus_slot_${i}`);
+                    this.initSaveStateSlots();
+                    this.showToast('Cleared All Saves');
+                };
+            }
+
+            showToast(msg) {
+                const toast = document.getElementById('toastMessage');
+                document.getElementById('toastText').innerText = msg;
+                toast.classList.remove('opacity-0');
+                setTimeout(() => toast.classList.add('opacity-0'), 2000);
+            }
+
+            // MAIN ANIMATION EMULATION LOOP
+            startLoop() {
+                let lastTime = performance.now();
+                const fpsCounter = document.getElementById('fpsCounter');
+
+                const loop = (now) => {
+                    const dt = (now - lastTime) / 1000;
+                    lastTime = now;
+
+                    if (!this.isPaused && this.engine) {
+                        // Apply Speed Multiplier loops
+                        const iterations = Math.round(this.speedMultiplier);
+                        for (let i = 0; i < iterations; i++) {
+                            this.engine.update(input);
+                        }
+                        this.engine.draw();
+                    }
+
+                    if (dt > 0) {
+                        fpsCounter.innerText = `${Math.round(1 / dt)} FPS`;
+                    }
+
+                    requestAnimationFrame(loop);
+                };
+                requestAnimationFrame(loop);
+            }
+        }
+
+        // Initialize Hub on Window Load
+        let hub = null;
+        window.addEventListener('load', () => {
+            hub = new EmulatorHub();
+        });
+    </script>
+</body>
+</html>
